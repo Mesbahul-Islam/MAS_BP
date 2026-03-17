@@ -68,6 +68,7 @@ class TruckAgent(Agent):
         if remaining_distance <= step_distance:
             # Snap to next node when close enough and advance route pointer.
             self.fields.position = (target_x, target_y)
+            self.model.space.move_agent(self, self.fields.position)
             self.fields.current_route_index = next_index
             self.send_telemetry()
             return
@@ -75,6 +76,7 @@ class TruckAgent(Agent):
         # Ratio for proportional movement towards the next node.
         ratio = step_distance / remaining_distance
         self.fields.position = (round(x + delta_x * ratio, 2), round(y + delta_y * ratio, 2))
+        self.model.space.move_agent(self, self.fields.position)
         self.send_telemetry()
 
 
