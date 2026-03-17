@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 from mesa import Model
 
 from simulation.agents.truck_agent import TruckAgent
+from simulation.nodes import ROUTES
+
 
 
 class FreightSimulationModel(Model):
@@ -15,9 +14,20 @@ class FreightSimulationModel(Model):
         super().__init__(seed=seed)
         
         self.num_trucks = num_trucks
+        # Simulation tick counter (increments each model.step())
+        self.tick = 0
 
-        #Create trucks
-        TruckAgent.create_agents(model=self, n=self.num_trucks)
+        # Candidate routes for trucks. If there are more trucks than routes, routes will be reused in round-robin.
+        candidate_routes = ROUTES
+
+        # Assign a route to each truck. If there are more trucks than candidate routes,
+        # routes will be reused in round-robin.
+        routes_for_trucks = [candidate_routes[i % len(candidate_routes)] for i in range(self.num_trucks)]
+
+        # Create trucks, passing the per-agent `route` sequence so each agent gets its own route.
+        TruckAgent.create_agents(model=self, n=self.num_trucks, route=routes_for_trucks)
     
     def step(self):
-        self.agents.shuffle_do("say_hi")
+        # Advance global tick first so agents see current tick during their step.
+        self.tick += 1
+        self.agents.shuffle_do("step")

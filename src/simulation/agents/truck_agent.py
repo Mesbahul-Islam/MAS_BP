@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import random
-
 from mesa import Agent
+from simulation.nodes import NODE_COORDINATES
 
 
 @dataclass
@@ -17,24 +17,82 @@ class TruckFields:
     co2_ppm: float
     door_open: bool
     comm_online: bool
+    current_route_index: int
 
+CARGO_TYPES = ["Electronics", "Furniture", "Food", "Clothing", "Machinery"]
 
 class TruckAgent(Agent):
-    """Minimal truck agent with only core simulation fields."""
+    """truck agent with only core simulation fields."""
 
-    def __init__(self,model):
+    def __init__(self, model, route: list[str]):
         super().__init__(model)
         self.fields = TruckFields(
             truck_id=self.unique_id,
-            cargo_type=random.choice(["pharma_refrigerated", "electronics", "furniture"]),
-            route=["Node-A", "Node-B", "Node-C"],
-            position=(0.0, 0.0),
-            speed_kmh=0.0,
+            cargo_type=random.choice(CARGO_TYPES),
+            route=route,
+            position=NODE_COORDINATES[route[0]],
+            speed_kmh=random.uniform(60.0, 100.0),
             temperature_c=20.0,
             co2_ppm=400.0,
             door_open=False,
             comm_online=True,
+            current_route_index=0,
         )
-    def say_hi(self) -> None:
-        print (f"Hi, I'm truck {self.fields.truck_id} carrying {self.fields.cargo_type}!")
+
+    def step(self):
+        """
+        Move the truck along its route based on its speed and update position. Actions taken per tick 
+        """
+
+        # If this truck already reached the final node, keep it parked.
+        if self.fields.current_route_index >= len(self.fields.route) - 1:
+            self.fields.speed_kmh = 0.0
+            self.send_telemetry()
+            return
+        
+        # Move towards the next point in the route.
+        next_index = self.fields.current_route_index + 1
+        # Keep track of current and next node
+        current_node = self.fields.route[self.fields.current_route_index]
+        next_node = self.fields.route[next_index]
+
+        x, y = self.fields.position
+        target_x, target_y = NODE_COORDINATES[next_node]
+
+        # Convert km/h to km per simulation tick (1 tick = 1 minute).
+        step_distance = self.fields.speed_kmh / 60.0
+        delta_x = target_x - x
+        delta_y = target_y - y
+        remaining_distance = (delta_x**2 + delta_y**2) ** 0.5
+
+        if remaining_distance <= step_distance:
+            # Snap to next node when close enough and advance route pointer.
+            self.fields.position = (target_x, target_y)
+            self.fields.current_route_index = next_index
+            self.send_telemetry()
+            return
+
+        # Ratio for proportional movement towards the next node.
+        ratio = step_distance / remaining_distance
+        self.fields.position = (round(x + delta_x * ratio, 2), round(y + delta_y * ratio, 2))
+        self.send_telemetry()
+
+
+    def send_telemetry(self):
+        """Simulate sending telemetry data to the cloud."""
+        current_tick = getattr(self.model, "tick", 0)
+        if self.fields.comm_online and current_tick % 5 == 0:
+            telemetry_data = {
+                "truck_id": self.fields.truck_id,
+                "cargo_type": self.fields.cargo_type,
+                "tick": current_tick,
+                "position": self.fields.position,
+                "speed_kmh": self.fields.speed_kmh,
+                "temperature_c": self.fields.temperature_c,
+                "co2_ppm": self.fields.co2_ppm,
+                "door_open": self.fields.door_open,
+            }
+            print(f"Truck {self.fields.truck_id} telemetry: {telemetry_data} \n")
+
+    
     

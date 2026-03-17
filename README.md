@@ -24,6 +24,12 @@ Run from repository root:
 python run_simulation.py
 ```
 
+Change tick limit, number of trucks, tick duration and status update parameters by using 
+
+```
+python run_simulation.py --max-ticks {tick} --tick-seconds {seconds} --num-trucks {num_trucks} --status-every {interval}
+```
+
 
 ## Project Structure
 
