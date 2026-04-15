@@ -5,6 +5,7 @@ from mesa.space import ContinuousSpace
 
 from simulation.agents.truck_agent import TruckAgent
 from simulation.nodes import NODE_COORDINATES, ROUTES
+from simulation.agents.monitoring_agent import MonitoringAgent
 
 
 
@@ -38,10 +39,12 @@ class FreightSimulationModel(Model):
 
         # Create trucks, passing the per-agent `route` sequence so each agent gets its own route.
         TruckAgent.create_agents(model=self, n=self.num_trucks, route=routes_for_trucks)
+        MonitoringAgent(self)
 
         # Place all agents in the renderer-backed space.
-        for truck in self.agents:
-            self.space.place_agent(truck, truck.fields.position)
+        for agent in self.agents:
+           if isinstance(agent, TruckAgent):
+            self.space.place_agent(agent, agent.fields.position)
     
     def step(self):
         # Advance global tick first so agents see current tick during their step.
