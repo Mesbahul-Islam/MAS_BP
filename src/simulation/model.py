@@ -4,6 +4,7 @@ from mesa import Model
 from mesa.space import ContinuousSpace
 
 from simulation.agents.truck_agent import TruckAgent
+from simulation.communication import ZeroMQTelemetryChannel
 from simulation.nodes import NODE_COORDINATES, ROUTES
 from simulation.agents.monitoring_agent import MonitoringAgent
 
@@ -12,7 +13,11 @@ from simulation.agents.monitoring_agent import MonitoringAgent
 class FreightSimulationModel(Model):
     """Minimal model that manages only truck agents and ticking."""
 
-    def __init__(self, num_trucks: int, seed: int | None = None) -> None:
+    def __init__(
+        self,
+        num_trucks: int,
+        seed: int | None = None,
+    ) -> None:
         super().__init__(seed=seed)
         
         self.num_trucks = num_trucks
@@ -37,9 +42,18 @@ class FreightSimulationModel(Model):
         # routes will be reused in round-robin.
         routes_for_trucks = [candidate_routes[i % len(candidate_routes)] for i in range(self.num_trucks)]
 
+        # Ephemeral telemetry pub/sub channel (ZeroMQ).
+        self.telemetry_channel = ZeroMQTelemetryChannel()
+
         # Create trucks, passing the per-agent `route` sequence so each agent gets its own route.
         TruckAgent.create_agents(model=self, n=self.num_trucks, route=routes_for_trucks)
         MonitoringAgent(self)
+        TruckAgent.create_agents(
+            model=self,
+            n=self.num_trucks,
+            route=routes_for_trucks,
+            telemetry_channel=self.telemetry_channel,
+        )
 
         # Place all agents in the renderer-backed space.
         for agent in self.agents:
@@ -50,3 +64,7 @@ class FreightSimulationModel(Model):
         # Advance global tick first so agents see current tick during their step.
         self.tick += 1
         self.agents.shuffle_do("step")
+
+    def close(self) -> None:
+        """Release ZeroMQ telemetry resources."""
+        self.telemetry_channel.close()

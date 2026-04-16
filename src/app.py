@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import os
+import threading
+
 import mesa.visualization.solara_viz as solara_viz_module
 from mesa.visualization import CommandConsole, Slider, SolaraViz, SpaceRenderer
 from mesa.visualization.components import AgentPortrayalStyle
 
+from config import TELEMETRY_ENDPOINT, TELEMETRY_OUTPUT_DIR, TELEMETRY_TOPIC
+from simulation.communication import run_telemetry_subscriber
 from simulation.agents.truck_agent import TruckAgent
 from simulation.model import FreightSimulationModel
 from simulation.nodes import NODE_COORDINATES, ROUTES
@@ -15,6 +20,25 @@ CARGO_COLORS = {
     "Clothing": "tab:red",
     "Machinery": "tab:purple",
 }
+
+
+def _ensure_background_subscriber() -> None:
+    """Start one telemetry subscriber per process for app-driven runs."""
+    if os.environ.get("TELEMETRY_SUBSCRIBER_STARTED") == "1":
+        return
+
+    thread = threading.Thread(
+        target=run_telemetry_subscriber,
+        kwargs={
+            "endpoint": TELEMETRY_ENDPOINT,
+            "topic": TELEMETRY_TOPIC,
+            "output_root": TELEMETRY_OUTPUT_DIR,
+        },
+        daemon=True,
+        name="telemetry-subscriber",
+    )
+    thread.start()
+    os.environ["TELEMETRY_SUBSCRIBER_STARTED"] = "1"
 
 
 def _wide_grid_layout(num_components: int):
@@ -45,6 +69,18 @@ def truck_portrayal(agent):
 
 
 def post_process_space(ax):
+    # Remove previously drawn static artists to avoid accumulating stale collections
+    # across Solara rerenders/resets.
+    for line in list(ax.lines):
+        if line.get_gid() == "static_route":
+            line.remove()
+    for collection in list(ax.collections):
+        if collection.get_gid() == "static_node":
+            collection.remove()
+    for text in list(ax.texts):
+        if text.get_gid() == "static_node_label":
+            text.remove()
+
     ax.figure.set_size_inches(20, 12)
     ax.figure.set_dpi(120)
     # Use full axes area instead of preserving equal aspect ratio (which can letterbox).
@@ -66,12 +102,15 @@ def post_process_space(ax):
         route_points = [NODE_COORDINATES[node] for node in route]
         xs = [point[0] for point in route_points]
         ys = [point[1] for point in route_points]
-        ax.plot(xs, ys, color="lightgray", linestyle="--", linewidth=1.2, zorder=1)
+        (line,) = ax.plot(xs, ys, color="lightgray", linestyle="--", linewidth=1.2, zorder=1)
+        line.set_gid("static_route")
 
     # Draw node markers and labels.
     for node, (x, y) in NODE_COORDINATES.items():
-        ax.scatter(x, y, marker="s", s=80, color="black", zorder=2)
-        ax.text(x + 40, y + 20, node, fontsize=8, color="black")
+        node_marker = ax.scatter(x, y, marker="s", s=80, color="black", zorder=2)
+        node_marker.set_gid("static_node")
+        node_label = ax.text(x + 40, y + 20, node, fontsize=8, color="black")
+        node_label.set_gid("static_node_label")
 
 
 model_params = {
@@ -83,6 +122,8 @@ model_params = {
     },
 }
 
+_ensure_background_subscriber()
+
 model = FreightSimulationModel(num_trucks=4, seed=42)
 
 # Override default SolaraViz card sizing to make the map canvas larger.
@@ -93,6 +134,7 @@ renderer = SpaceRenderer(
     backend="matplotlib",
 ).setup_agents(truck_portrayal)
 renderer.post_process = post_process_space
+# Trigger an initial artist build so agent markers remain visible after first tick.
 renderer.draw_agents()
 
 page = SolaraViz(

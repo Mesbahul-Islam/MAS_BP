@@ -1,8 +1,14 @@
 from __future__ import annotations
 
-import argparse
 import time
 
+from config import (
+    SIM_MAX_TICKS,
+    SIM_NUM_TRUCKS,
+    SIM_PUBSUB_STARTUP_DELAY_SECONDS,
+    SIM_SEED,
+    SIM_TICK_SECONDS,
+)
 from simulation.model import FreightSimulationModel
 from simulation.agents.truck_agent import TruckAgent
 
@@ -23,45 +29,23 @@ def print_tick_summary(model: FreightSimulationModel) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run real-time freight simulation.")
-    parser.add_argument("--num-trucks", type=int, default=4)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument(
-        "--tick-seconds",
-        type=float,
-        default=60.0,
-        help="Real-time duration of one simulation tick (default: 60 seconds).",
-    )
-    parser.add_argument(
-        "--status-every",
-        type=int,
-        default=5,
-        help="How many ticks between ordered status prints (default: 5).",
-    )
-    parser.add_argument(
-        "--max-ticks",
-        type=int,
-        default=0,
-        help="Optional stop after N ticks. Use 0 to run continuously.",
-    )
-    args = parser.parse_args()
+    model = FreightSimulationModel(num_trucks=SIM_NUM_TRUCKS, seed=SIM_SEED)
 
-    model = FreightSimulationModel(num_trucks=args.num_trucks, seed=args.seed)
+    # Allow PUB/SUB sockets to establish before first telemetry events are sent.
+    time.sleep(SIM_PUBSUB_STARTUP_DELAY_SECONDS)
 
-    print("Starting simulation (Ctrl+C to stop)...")
     try:
-        while args.max_ticks <= 0 or model.tick < args.max_ticks:
+        while SIM_MAX_TICKS <= 0 or model.tick < SIM_MAX_TICKS:
             tick_start = time.monotonic()
             model.step()
 
-            if model.tick % args.status_every == 0:
-                print_tick_summary(model)
-
             elapsed = time.monotonic() - tick_start
-            sleep_for = max(0.0, args.tick_seconds - elapsed)
+            sleep_for = max(0.0, SIM_TICK_SECONDS - elapsed)
             time.sleep(sleep_for)
     except KeyboardInterrupt:
-        print("Simulation stopped by user.")
+        pass
+    finally:
+        model.close()
 
 if __name__ == "__main__":
     main()

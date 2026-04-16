@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import random
 from mesa import Agent
+from simulation.communication import ZeroMQTelemetryChannel
 from simulation.nodes import NODE_COORDINATES
 
 
@@ -24,8 +25,10 @@ CARGO_TYPES = ["Electronics", "Furniture", "Food", "Clothing", "Machinery"]
 class TruckAgent(Agent):
     """truck agent with only core simulation fields."""
 
-    def __init__(self, model, route: list[str]):
+    def __init__(self, model, route: list[str], telemetry_channel: ZeroMQTelemetryChannel):
         super().__init__(model)
+        self.telemetry_channel = telemetry_channel
+        self.agent_name = f"truck_{self.unique_id}"
         self.fields = TruckFields(
             truck_id=self.unique_id,
             cargo_type=random.choice(CARGO_TYPES),
@@ -81,9 +84,9 @@ class TruckAgent(Agent):
 
 
     def send_telemetry(self):
-        """Simulate sending telemetry data to the cloud."""
+        """Publish telemetry data over ZeroMQ pub/sub."""
         current_tick = getattr(self.model, "tick", 0)
-        if self.fields.comm_online and current_tick % 5 == 0:
+        if self.fields.comm_online:
             telemetry_data = {
                 "truck_id": self.fields.truck_id,
                 "cargo_type": self.fields.cargo_type,
@@ -94,7 +97,11 @@ class TruckAgent(Agent):
                 "co2_ppm": self.fields.co2_ppm,
                 "door_open": self.fields.door_open,
             }
-            print(f"Truck {self.fields.truck_id} telemetry: {telemetry_data} \n")
+            self.telemetry_channel.publish(
+                tick=current_tick,
+                source_agent=self.agent_name,
+                payload=telemetry_data,
+            )
 
     
     
