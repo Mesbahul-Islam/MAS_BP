@@ -3,11 +3,17 @@ from __future__ import annotations
 import os
 import threading
 
+import matplotlib.patches as patches
 import mesa.visualization.solara_viz as solara_viz_module
-from mesa.visualization import CommandConsole, Slider, SolaraViz, SpaceRenderer
+from mesa.visualization import CommandConsole, SolaraViz, SpaceRenderer
 from mesa.visualization.components import AgentPortrayalStyle
 
-from config import TELEMETRY_ENDPOINT, TELEMETRY_OUTPUT_DIR, TELEMETRY_TOPIC
+from config import (
+    SIM_SEED,
+    TELEMETRY_ENDPOINT,
+    TELEMETRY_OUTPUT_DIR,
+    TELEMETRY_TOPIC,
+)
 from simulation.communication import run_telemetry_subscriber
 from simulation.agents.truck_agent import TruckAgent
 from simulation.model import FreightSimulationModel
@@ -42,15 +48,15 @@ def _ensure_background_subscriber() -> None:
 
 
 def _wide_grid_layout(num_components: int):
-    """Use full-width component cards so the space plot is significantly larger."""
+    """Use full-width, tall cards so the map fills the page."""
     return [
         {
             "i": i,
             "w": 12,
-            "h": 20,
+            "h": 30,
             "moved": False,
             "x": 0,
-            "y": 20 * i,
+            "y": 30 * i,
         }
         for i in range(num_components)
     ]
@@ -63,26 +69,18 @@ def truck_portrayal(agent):
     return AgentPortrayalStyle(
         marker="o",
         color=CARGO_COLORS.get(agent.fields.cargo_type, "black"),
-        size=90,
+        size=50,
         zorder=3,
     )
 
 
 def post_process_space(ax):
-    # Remove previously drawn static artists to avoid accumulating stale collections
-    # across Solara rerenders/resets.
-    for line in list(ax.lines):
-        if line.get_gid() == "static_route":
-            line.remove()
-    for collection in list(ax.collections):
-        if collection.get_gid() == "static_node":
-            collection.remove()
-    for text in list(ax.texts):
-        if text.get_gid() == "static_node_label":
-            text.remove()
-
-    ax.figure.set_size_inches(20, 12)
+    ax.figure.set_size_inches(20, 10)
     ax.figure.set_dpi(120)
+    ax.figure.set_constrained_layout(False)
+    if hasattr(ax.figure, "set_layout_engine"):
+        ax.figure.set_layout_engine("constrained")
+    
     # Use full axes area instead of preserving equal aspect ratio (which can letterbox).
     ax.set_aspect("auto")
     ax.set_title("Freight Truck Map")
@@ -91,10 +89,12 @@ def post_process_space(ax):
 
     x_values = [coords[0] for coords in NODE_COORDINATES.values()]
     y_values = [coords[1] for coords in NODE_COORDINATES.values()]
-    x_margin = (max(x_values) - min(x_values)) * 0.03
-    y_margin = (max(y_values) - min(y_values)) * 0.06
-    ax.set_xlim(min(x_values) - x_margin, max(x_values) + x_margin)
-    ax.set_ylim(min(y_values) - y_margin, max(y_values) + y_margin)
+    x_min, x_max = min(x_values), max(x_values)
+    y_min, y_max = min(y_values), max(y_values)
+    x_margin = (x_max - x_min) * 0.08 if x_max != x_min else 10.0
+    y_margin = (y_max - y_min) * 0.08 if y_max != y_min else 10.0
+    ax.set_xlim(x_min - x_margin, x_max + x_margin)
+    ax.set_ylim(y_min - y_margin, y_max + y_margin)
     ax.margins(x=0, y=0)
 
     # Draw all route segments in the background.
@@ -107,26 +107,26 @@ def post_process_space(ax):
 
     # Draw node markers and labels.
     for node, (x, y) in NODE_COORDINATES.items():
-        node_marker = ax.scatter(x, y, marker="s", s=80, color="black", zorder=2)
-        node_marker.set_gid("static_node")
+        rect = patches.Rectangle((x - 10, y - 10), 20, 20, linewidth=1, edgecolor='black', facecolor='black', zorder=2)
+        rect.set_gid("static_node")
+        ax.add_patch(rect)
         node_label = ax.text(x + 40, y + 20, node, fontsize=8, color="black")
         node_label.set_gid("static_node_label")
 
 
 model_params = {
-    "num_trucks": Slider("Number of Trucks", 4, 1, 20, 1),
     "seed": {
         "type": "InputText",
-        "value": 42,
+        "value": SIM_SEED,
         "label": "Random Seed",
     },
 }
 
 _ensure_background_subscriber()
 
-model = FreightSimulationModel(num_trucks=4, seed=42)
+model = FreightSimulationModel(rng=SIM_SEED)
 
-# Override default SolaraViz card sizing to make the map canvas larger.
+# Make the Solara cards fill available width/height.
 solara_viz_module.make_initial_grid_layout = _wide_grid_layout
 
 renderer = SpaceRenderer(

@@ -1,32 +1,44 @@
 from mesa import Agent
 from simulation.agents.truck_agent import TruckAgent
+from simulation.schemas import TruckTelemetryPayload
 
 class MonitoringAgent(Agent):
     
     def __init__(self, model):
         super().__init__(model)
 
-    def normalize(self, snapshot):
-        return {
-        "speed": snapshot["speed_kmh"] / 100,
-        "temperature": snapshot["temperature_c"] / 50,
-        "co2": snapshot["co2_ppm"] / 2000,
-        "door_open": 1 if snapshot["door_open"] else 0
-    }
-
     def step(self):
         
         for agent in self.model.agents:
             if isinstance(agent, TruckAgent):
 
-                snapshot = {
+                current_tick = getattr(self.model, "tick", 0)
+                telemetry_snapshot: TruckTelemetryPayload = {
+                    "truck_id": str(agent.fields.truck_id),
+                    "cargo_type": agent.fields.cargo_type,
+                    "tick": current_tick,
+                    "position": [agent.fields.position[0], agent.fields.position[1]],
                     "speed_kmh": agent.fields.speed_kmh,
                     "temperature_c": agent.fields.temperature_c,
                     "co2_ppm": agent.fields.co2_ppm,
-                    "door_open": agent.fields.door_open
+                    "door_open": agent.fields.door_open,
                 }
 
-                normalized = self.normalize(snapshot)
+                monitoring_snapshot = {
+                    "truck_id": telemetry_snapshot["truck_id"],
+                    "tick": telemetry_snapshot["tick"],
+                    "speed": telemetry_snapshot["speed_kmh"] / 100.0,
+                    "temperature": telemetry_snapshot["temperature_c"] / 50.0,
+                    "co2": telemetry_snapshot["co2_ppm"] / 2000.0,
+                    "door_open": 1 if telemetry_snapshot["door_open"] else 0,
+                }
 
-                print(f"Monitoring → Truck {agent.fields.truck_id}: {normalized}")
+                analysis_snapshot = {
+                    "truck_id": monitoring_snapshot["truck_id"],
+                    "tick": monitoring_snapshot["tick"],
+                    "monitoring_snapshot": monitoring_snapshot,
+                    "telemetry_snapshot": telemetry_snapshot,
+                }
+
+                
 

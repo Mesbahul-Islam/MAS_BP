@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from config import SIM_ACTIVE_SCENARIO, SIM_NUM_TRUCKS, SIM_SCENARIOS
 from mesa import Model
 from mesa.space import ContinuousSpace
 
@@ -15,17 +16,19 @@ class FreightSimulationModel(Model):
 
     def __init__(
         self,
-        num_trucks: int,
+        rng=None,
         seed: int | None = None,
     ) -> None:
-        super().__init__(seed=seed)
+        if rng is None and seed is not None:
+            rng = seed
+        super().__init__(rng=rng)
         
-        self.num_trucks = num_trucks
+        self.num_trucks = SIM_NUM_TRUCKS
         # Simulation tick counter (increments each model.step())
         self.tick = 0
-
-        # Candidate routes for trucks. If there are more trucks than routes, routes will be reused in round-robin.
-        candidate_routes = ROUTES
+        candidate_routes = SIM_SCENARIOS.get(SIM_ACTIVE_SCENARIO)
+        if not candidate_routes:
+            candidate_routes = ROUTES
 
         # Build a continuous map space using node coordinate bounds.
         x_values = [coords[0] for coords in NODE_COORDINATES.values()]
@@ -38,22 +41,20 @@ class FreightSimulationModel(Model):
             y_min=min(y_values) - 2,
         )
 
-        # Assign a route to each truck. If there are more trucks than candidate routes,
-        # routes will be reused in round-robin.
+        # Assign per-truck routes from selected scenario.
         routes_for_trucks = [candidate_routes[i % len(candidate_routes)] for i in range(self.num_trucks)]
 
         # Ephemeral telemetry pub/sub channel (ZeroMQ).
         self.telemetry_channel = ZeroMQTelemetryChannel()
 
         # Create trucks, passing the per-agent `route` sequence so each agent gets its own route.
-        TruckAgent.create_agents(model=self, n=self.num_trucks, route=routes_for_trucks)
-        MonitoringAgent(self)
         TruckAgent.create_agents(
             model=self,
             n=self.num_trucks,
             route=routes_for_trucks,
             telemetry_channel=self.telemetry_channel,
         )
+        MonitoringAgent(self)
 
         # Place all agents in the renderer-backed space.
         for agent in self.agents:

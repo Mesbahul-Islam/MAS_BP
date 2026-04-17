@@ -1,43 +1,22 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
-from uuid import uuid4
+from typing import cast
 
 from config import TELEMETRY_ENDPOINT, TELEMETRY_TOPIC
+from simulation.schemas import (
+	AgentEvent,
+	TRUCK_TELEMETRY_SCHEMA,
+	TruckTelemetryPayload,
+)
 import zmq
 
 
-@dataclass(frozen=True)
-class TelemetryEvent:
-	"""Telemetry event schema sent over the pub/sub channel."""
-	message_id:str
-	timestamp_utc: str
-	tick: int
-	source_agent: str
-	payload: dict[str, Any]
-
-	def to_dict(self) -> dict[str, Any]:
-		return {
-			"message_id": self.message_id,
-			"timestamp_utc": self.timestamp_utc,
-			"tick": self.tick,
-			"source_agent": self.source_agent,
-			"payload": self.payload,
-		}
-
-	@classmethod
-	def from_dict(cls, data: dict[str, Any]) -> TelemetryEvent:
-		return cls(
-			message_id=str(data["message_id"]),
-			timestamp_utc=str(data["timestamp_utc"]),
-			tick=int(data["tick"]),
-			source_agent=str(data["source_agent"]),
-			payload=dict(data["payload"]),
-		)
+_publisher_lock = threading.Lock()
+_shared_publishers: dict[str, dict] = {}
 
 
 class ZeroMQTelemetryChannel:
@@ -46,34 +25,80 @@ class ZeroMQTelemetryChannel:
 	def __init__(self) -> None:
 		self.topic = TELEMETRY_TOPIC
 		self.endpoint = TELEMETRY_ENDPOINT
-		self.context = zmq.Context()
-		self._publisher = self.context.socket(zmq.PUB)
-		self._publisher.setsockopt(zmq.LINGER, 0)
-		self.message_id_counter = 0
-		self._publisher.bind(self.endpoint)
+		self.message_id_counters = {}
 
-	def publish(self, *, tick: int, source_agent: str, payload: dict[str, Any]) -> TelemetryEvent:
+		with _publisher_lock:
+			shared = _shared_publishers.get(self.endpoint)
+			if shared and not shared["publisher"].closed:
+				self.context = shared["context"]
+				self._publisher = shared["publisher"]
+				shared["ref_count"] += 1
+				self._owns_socket = False
+				return
+
+			self.context = zmq.Context.instance()
+			self._publisher = self.context.socket(zmq.PUB)
+			self._publisher.setsockopt(zmq.LINGER, 0)
+
+			# Normal path: this channel owns the bound publisher.
+			# If already bound externally, fall back to connect so app reset does not crash.
+			self._owns_socket = True
+			try:
+				self._publisher.bind(self.endpoint)
+			except zmq.ZMQError as err:
+				if err.errno == zmq.EADDRINUSE:
+					self._publisher.connect(self.endpoint)
+					self._owns_socket = False
+				else:
+					self._publisher.close(linger=0)
+					raise
+
+			_shared_publishers[self.endpoint] = {
+				"context": self.context,
+				"publisher": self._publisher,
+				"ref_count": 1,
+			}
+
+	def publish(self, *, tick: int, source_agent: str, payload: TruckTelemetryPayload) -> AgentEvent:
 		"""Publish a telemetry event to subscribers.
 
 		Events are not stored in memory by this channel.
 		"""
-		event = TelemetryEvent(
-			message_id=self.message_id_counter,
-			timestamp_utc=datetime.now(timezone.utc).isoformat(),
-			tick=tick,
-			source_agent=source_agent,
-			payload=payload,
-		)
-		self.message_id_counter += 1
+		# message id not shared anymore
+		truck_key = str(payload.get("truck_id", source_agent))
+		message_id = self.message_id_counters.get(truck_key, 0)
+		self.message_id_counters[truck_key] = message_id + 1
+
+		event: AgentEvent = {
+			"schema": TRUCK_TELEMETRY_SCHEMA,
+			"message_id": message_id,
+			"timestamp_utc": datetime.now(timezone.utc).isoformat(),
+			"tick": tick,
+			"source_agent": source_agent,
+			"payload": payload,
+		}
 
 		self._publisher.send_multipart(
-			[self.topic.encode("utf-8"), json.dumps(event.to_dict()).encode("utf-8")]
+			[self.topic.encode("utf-8"), json.dumps(event).encode("utf-8")]
 		)
 		return event
 
 	def close(self) -> None:
-		self._publisher.close(linger=0)
-		self.context.term()
+		with _publisher_lock:
+			shared = _shared_publishers.get(self.endpoint)
+			if not shared:
+				return
+
+			shared["ref_count"] -= 1
+			if shared["ref_count"] > 0:
+				return
+
+			publisher = shared["publisher"]
+			if not publisher.closed:
+				publisher.close(linger=0)
+
+			# If this process used Context.instance(), do not terminate it here.
+			_shared_publishers.pop(self.endpoint, None)
 
 
 def run_telemetry_subscriber(endpoint: str, topic: str, output_root: str) -> None:
@@ -90,13 +115,16 @@ def run_telemetry_subscriber(endpoint: str, topic: str, output_root: str) -> Non
 		while True:
 			_ignored_topic, raw_payload = subscriber.recv_multipart()
 			payload = json.loads(raw_payload.decode("utf-8"))
-			event = TelemetryEvent.from_dict(payload)
+			event = cast(AgentEvent, payload)
+			if event["schema"] != TRUCK_TELEMETRY_SCHEMA:
+				continue
+			truck_payload = cast(TruckTelemetryPayload, event["payload"])
 
-			truck_id = str(event.payload.get("truck_id", "unknown"))
+			truck_id = str(truck_payload["truck_id"])
 			log_file = output_base / f"truck_{truck_id}" / "output.jsonl"
 			log_file.parent.mkdir(parents=True, exist_ok=True)
 			with log_file.open("a", encoding="utf-8") as handle:
-				handle.write(json.dumps(event.to_dict()))
+				handle.write(json.dumps(event))
 				handle.write("\n")
 	finally:
 		subscriber.close(linger=0)

@@ -4,7 +4,6 @@ import time
 
 from config import (
     SIM_MAX_TICKS,
-    SIM_NUM_TRUCKS,
     SIM_PUBSUB_STARTUP_DELAY_SECONDS,
     SIM_SEED,
     SIM_TICK_SECONDS,
@@ -29,7 +28,7 @@ def print_tick_summary(model: FreightSimulationModel) -> None:
 
 
 def main():
-    model = FreightSimulationModel(num_trucks=SIM_NUM_TRUCKS, seed=SIM_SEED)
+    model = FreightSimulationModel(rng=SIM_SEED)
 
     # Allow PUB/SUB sockets to establish before first telemetry events are sent.
     time.sleep(SIM_PUBSUB_STARTUP_DELAY_SECONDS)

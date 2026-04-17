@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import random
 from mesa import Agent
+from config import TELEMETRY_PUBLISH_EVERY_TICKS
 from simulation.communication import ZeroMQTelemetryChannel
 from simulation.nodes import NODE_COORDINATES
+from simulation.schemas import TruckTelemetryPayload
 
 
 @dataclass
@@ -86,12 +88,14 @@ class TruckAgent(Agent):
     def send_telemetry(self):
         """Publish telemetry data over ZeroMQ pub/sub."""
         current_tick = getattr(self.model, "tick", 0)
+        if current_tick % TELEMETRY_PUBLISH_EVERY_TICKS != 0:
+            return
         if self.fields.comm_online:
-            telemetry_data = {
-                "truck_id": self.fields.truck_id,
+            telemetry_data: TruckTelemetryPayload = {
+                "truck_id": str(self.fields.truck_id),
                 "cargo_type": self.fields.cargo_type,
                 "tick": current_tick,
-                "position": self.fields.position,
+                "position": [self.fields.position[0], self.fields.position[1]],
                 "speed_kmh": self.fields.speed_kmh,
                 "temperature_c": self.fields.temperature_c,
                 "co2_ppm": self.fields.co2_ppm,
