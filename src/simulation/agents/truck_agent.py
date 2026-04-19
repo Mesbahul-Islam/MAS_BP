@@ -48,44 +48,83 @@ class TruckAgent(Agent):
         Move the truck along its route based on its speed and update position. Actions taken per tick 
         """
 
+        if self._handle_anomaly_scenario():
+            return
+
+        if self._handle_arrived_at_destination():
+            return
+
+        self._move_along_route()
+
+    def _handle_anomaly_scenario(self):
+        """Handle anomaly-specific behavior and return True when handled."""
+        if SIM_ACTIVE_SCENARIO == "cargo_state":
+            self._apply_cargo_state_anomaly()
+            return False
+
+        if (
+            SIM_ACTIVE_SCENARIO != "anomaly_stop_open_at_d"
+            or getattr(self.model, "bad_truck_id", None) != self.fields.truck_id
+        ):
+            return False
+
         current_node = self.fields.route[self.fields.current_route_index]
 
         # In anomaly scenario, the bad truck stops once at node D and opens its door briefly.
-        if (
-            SIM_ACTIVE_SCENARIO == "anomaly_stop_open_at_d"
-            and getattr(self.model, "bad_truck_id", None) == self.fields.truck_id
-        ):
-            # Phase 1: hold at D with door open for a fixed 30 ticks.
-            if self.fields.d_stop_ticks_remaining > 0:
-                self.fields.speed_kmh = 0.0
-                self.fields.door_open = True
-                self.fields.d_stop_ticks_remaining -= 1
-                self.fields.comm_online = False
-                self.send_telemetry()
-                return
+        # Phase 1: hold at D with door open for a fixed 30 ticks.
+        if self.fields.d_stop_ticks_remaining > 0:
+            self.fields.speed_kmh = 0.0
+            self.fields.door_open = True
+            self.fields.d_stop_ticks_remaining -= 1
+            self.fields.comm_online = False
+            self.send_telemetry()
+            return True
 
-            # Phase 2: close door once after the 30-tick hold, then resume next tick.
-            if self.fields.d_stop_applied and self.fields.door_open:
-                self.fields.door_open = False
-                self.fields.speed_kmh = self.fields.cruise_speed_kmh
-                self.send_telemetry()
-                return
+        # Phase 2: close door once after the 30-tick hold, then resume next tick.
+        if self.fields.d_stop_applied and self.fields.door_open:
+            self.fields.door_open = False
+            self.fields.speed_kmh = self.fields.cruise_speed_kmh
+            self.send_telemetry()
+            return True
 
-            if current_node == "D" and not self.fields.d_stop_applied:
-                self.fields.d_stop_applied = True
-                self.fields.d_stop_ticks_remaining = 30
-                self.fields.speed_kmh = 0.0
-                self.fields.door_open = True
-                self.fields.comm_online = False
-                self.send_telemetry()
-                return
+        if current_node == "D" and not self.fields.d_stop_applied:
+            self.fields.d_stop_applied = True
+            self.fields.d_stop_ticks_remaining = 30
+            self.fields.speed_kmh = 0.0
+            self.fields.door_open = True
+            self.fields.comm_online = False
+            self.send_telemetry()
+            return True
 
-        # If this truck already reached the final node, keep it parked.
+        return False
+
+    def _apply_cargo_state_anomaly(self):
+        """Simple cargo anomaly: gradually increase temperature and CO2."""
+        is_bad_truck = getattr(self.model, "bad_truck_id", None) == self.fields.truck_id
+        if not is_bad_truck:
+            return
+        
+        if self.fields.temperature_c >= 40.0:
+            self.fields.temperature_c = self.fields.temperature_c  # Cap temperature increase
+        else:
+            self.fields.temperature_c = round(self.fields.temperature_c + 0.025, 2)
+
+        if self.fields.co2_ppm >= 1000.0:
+            self.fields.co2_ppm = self.fields.co2_ppm  # Cap CO2 increase
+        else:
+            self.fields.co2_ppm = round(self.fields.co2_ppm + 1.2, 2)
+
+    def _handle_arrived_at_destination(self):
+        """Keep truck parked after reaching final route node."""
         if self.fields.current_route_index >= len(self.fields.route) - 1:
             self.fields.speed_kmh = 0.0
             self.send_telemetry()
-            return
-        
+            return True
+
+        return False
+
+    def _move_along_route(self):
+        """Execute normal movement logic for active route progress."""
         # Move towards the next point in the route.
         next_index = self.fields.current_route_index + 1
         # Keep track of current and next node

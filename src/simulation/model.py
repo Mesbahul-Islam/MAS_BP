@@ -8,6 +8,7 @@ from mesa import Model
 from mesa.space import ContinuousSpace
 
 from simulation.agents.truck_agent import TruckAgent
+from simulation.agents.route_analysis_agent import RouteAnalysisAgent
 from simulation.communication import ZeroMQTelemetryChannel
 from simulation.nodes import NODE_COORDINATES, ROUTES
 from simulation.agents.monitoring_agent import MonitoringAgent
@@ -28,6 +29,8 @@ class FreightSimulationModel(Model):
         
         self.num_trucks = SIM_NUM_TRUCKS
         self.running = True
+        self.latest_monitoring_payload = None
+        self.route_analysis_hypotheses = []
         # Simulation tick counter (increments each model.step())
         self.tick = 0
         candidate_routes = SIM_SCENARIOS.get(SIM_ACTIVE_SCENARIO)
@@ -48,7 +51,7 @@ class FreightSimulationModel(Model):
         # Assign per-truck routes from selected scenario.
         routes_for_trucks = [candidate_routes[i % len(candidate_routes)] for i in range(self.num_trucks)]
 
-        # Ephemeral telemetry pub/sub channel (ZeroMQ).
+        # telemetry pub/sub channel (ZeroMQ).
         self.telemetry_channel = ZeroMQTelemetryChannel()
         self.monitoring_channel = ZeroMQTelemetryChannel(
             topic=MONITORING_TOPIC,
@@ -72,6 +75,8 @@ class FreightSimulationModel(Model):
             telemetry_channel=self.telemetry_channel,
             monitoring_channel=self.monitoring_channel,
         )
+
+        RouteAnalysisAgent(self)
 
         # Place all agents in the renderer-backed space.
         for agent in self.agents:

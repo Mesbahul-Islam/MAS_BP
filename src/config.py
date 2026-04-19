@@ -19,7 +19,8 @@ SIM_PUBSUB_STARTUP_DELAY_SECONDS = 0.2
 # "normal": both trucks go A -> C
 # "deviation": truck 0 goes A -> B -> C, truck 1 goes A -> C
 # "anomaly_stop_open_at_d": truck 0 stops at D, opens door briefly, then continues
-SIM_ACTIVE_SCENARIO = "anomaly_stop_open_at_d"
+# "cargo_state": truck 0 gradually increases temperature and CO2
+SIM_ACTIVE_SCENARIO = "cargo_state"
 
 # Fixed routes per truck for each scenario.
 SIM_SCENARIOS = {
@@ -33,6 +34,10 @@ SIM_SCENARIOS = {
     ],
     "anomaly_stop_open_at_d": [
         ["A", "B", "D", "C"],
+        ["A", "C"],
+    ],
+    "cargo_state": [
+        ["A", "B", "C"],
         ["A", "C"],
     ],
 }

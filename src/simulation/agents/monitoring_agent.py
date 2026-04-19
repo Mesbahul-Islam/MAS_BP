@@ -47,6 +47,7 @@ class MonitoringAgent(Agent):
                 "tick": current_tick,
                 "snapshots": snapshots,
             }
+            self.model.latest_monitoring_payload = aggregated_payload
             
             self.monitoring_channel.publish(
                 tick=current_tick,

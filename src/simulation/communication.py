@@ -105,7 +105,7 @@ def run_telemetry_subscriber(endpoint, topic, output_root):
 	"""Subscribe to a topic and append each event as a JSON line."""
 	output_base = Path(output_root)
 	output_base.mkdir(parents=True, exist_ok=True)
-	log_file = output_base / "output.json"
+	log_file = output_base / "output.jsonl"
 
 	# Start each subscriber run with a clean output file.
 	with log_file.open("w", encoding="utf-8"):

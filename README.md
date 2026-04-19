@@ -1,28 +1,28 @@
 # MAS_BP
 
-Mesa freight simulation prototype with real-time ticking and Solara map visualization.
+Multi-agent freight simulation built with Mesa, with live map visualization in Solara and ZeroMQ-based event streaming.
 
-Current implementation includes only:
+## Current Features
 
-- `TruckAgent` movement along predefined routes
-- `FreightSimulationModel` with global tick tracking
-- Telemetry emission every 5 ticks
-- Solara map view for live truck movement
+- Truck movement across route nodes on a continuous space map.
+- Monitoring agent that aggregates truck snapshots and publishes monitoring events.
+- Shared ZeroMQ endpoint with separate topics for truck telemetry and monitoring snapshots.
+- Monitoring output persistence to file, with automatic file reset for new runs.
+- Scenario-based route and anomaly behavior selection from config.
+- Simulation auto-stop when all trucks reach their final node.
 
 ## Setup
 
-1. Create and activate a virtual environment.
-2. Install dependencies:
+From repository root:
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## Windows Setup
-
-From the repository root:
-
-PowerShell:
+Windows PowerShell:
 
 ```powershell
 python -m venv .venv
@@ -31,7 +31,7 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Command Prompt (CMD):
+Windows CMD:
 
 ```bat
 python -m venv .venv
@@ -40,77 +40,68 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-If PowerShell blocks activation scripts, run this once in PowerShell:
+## Run Modes
 
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-```
-
-## Run Simulation
-
-Run from repository root:
+Run headless simulation:
 
 ```bash
 python src/run_simulation.py
 ```
 
-Real-time mode uses `1 tick = 60 seconds` by default. Stop with `Ctrl+C`.
-
-Change tick limit, number of trucks, tick duration and status update interval using:
-
-```bash
-python src/run_simulation.py --max-ticks {ticks} --tick-seconds {seconds} --num-trucks {num_trucks} --status-every {interval}
-```
-
-Quick test example:
-
-```bash
-python src/run_simulation.py --max-ticks 10 --tick-seconds 0.01 --status-every 5
-```
-
-Windows example:
-
-```powershell
-python src/run_simulation.py --max-ticks 10 --tick-seconds 0.01 --status-every 5
-```
-
-## Run Solara Map
-
-Run from repository root:
+Run Solara app:
 
 ```bash
 solara run src/app.py
 ```
 
-Windows example:
+Then open the URL printed by Solara (usually http://localhost:8765).
 
-```powershell
-solara run src/app.py
-```
+## Runtime Behavior
 
-Then open the local URL printed by Solara (usually `http://localhost:8765`).
+- Tick duration is configured via SIM_TICK_SECONDS in [src/config.py](src/config.py).
+- Telemetry publish interval is controlled by TELEMETRY_PUBLISH_EVERY_TICKS in [src/config.py](src/config.py).
+- Monitoring snapshots are also published on the same tick interval.
+- Simulation stops automatically when all trucks reach their destination nodes.
 
-The map view shows:
+## Topics and Logging
 
-- Node locations and labels
-- Route lines
-- Moving truck markers (color-coded by cargo type)
+- Endpoint: TELEMETRY_ENDPOINT in [src/config.py](src/config.py)
+- Truck topic: TELEMETRY_TOPIC
+- Monitoring topic: MONITORING_TOPIC
 
+Only monitoring-topic messages are currently persisted by the subscriber flow.
 
-## Project Structure
+Output file:
 
-```text
-src/
-	app.py
-	run_simulation.py
-	simulation/
-		model.py
-		nodes.py
-		agents/
-			truck_agent.py
-```
+- [outputs/monitoring_logs/output.json](outputs/monitoring_logs/output.json)
 
-## Notes
+Log reset behavior:
 
-- One `TruckAgent` represents one shipment.
-- Telemetry is emitted every 5 simulation ticks.
+- File is cleared when subscriber starts.
+- File is cleared again if incoming tick value goes backward, which indicates a new simulation run.
+
+## Scenario Selection
+
+Set active scenario in [src/config.py](src/config.py):
+
+- normal
+- deviation
+- anomaly_stop_open_at_d
+
+Current anomaly behavior for anomaly_stop_open_at_d:
+
+- The designated bad truck is truck 0 (first created truck).
+- At node D, it stops and opens door for 30 ticks.
+- Door then closes.
+- Truck resumes movement afterward.
+
+## Key Files
+
+- [src/config.py](src/config.py): runtime settings, topics, scenarios.
+- [src/run_simulation.py](src/run_simulation.py): headless runner.
+- [src/app.py](src/app.py): Solara map app.
+- [src/telemetry_subscriber.py](src/telemetry_subscriber.py): monitoring-topic subscriber entrypoint.
+- [src/simulation/model.py](src/simulation/model.py): model orchestration and stop condition.
+- [src/simulation/agents/truck_agent.py](src/simulation/agents/truck_agent.py): truck movement and anomaly logic.
+- [src/simulation/agents/monitoring_agent.py](src/simulation/agents/monitoring_agent.py): aggregate monitoring snapshots.
+- [src/simulation/communication.py](src/simulation/communication.py): ZeroMQ channel and subscriber logging.
