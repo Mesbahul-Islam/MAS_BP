@@ -1,10 +1,12 @@
-from __future__ import annotations
-
 # ZeroMQ telemetry channel configuration
 TELEMETRY_ENDPOINT = "tcp://127.0.0.1:5590"
 TELEMETRY_TOPIC = "telemetry.truck"
 TELEMETRY_OUTPUT_DIR = "outputs/telemetry_logs"
 TELEMETRY_PUBLISH_EVERY_TICKS = 10
+
+# ZeroMQ monitoring topic configuration (same endpoint as telemetry)
+MONITORING_TOPIC = "monitoring.snapshot"
+MONITORING_OUTPUT_DIR = "outputs/monitoring_logs"
 
 # Simulation runtime configuration
 SIM_NUM_TRUCKS = 2
@@ -16,7 +18,8 @@ SIM_PUBSUB_STARTUP_DELAY_SECONDS = 0.2
 # Choose one scenario.
 # "normal": both trucks go A -> C
 # "deviation": truck 0 goes A -> B -> C, truck 1 goes A -> C
-SIM_ACTIVE_SCENARIO = "deviation"
+# "anomaly_stop_open_at_d": truck 0 stops at D, opens door briefly, then continues
+SIM_ACTIVE_SCENARIO = "anomaly_stop_open_at_d"
 
 # Fixed routes per truck for each scenario.
 SIM_SCENARIOS = {
@@ -25,6 +28,10 @@ SIM_SCENARIOS = {
         ["A", "C"],
     ],
     "deviation": [
+        ["A", "B", "D", "C"],
+        ["A", "C"],
+    ],
+    "anomaly_stop_open_at_d": [
         ["A", "B", "D", "C"],
         ["A", "C"],
     ],

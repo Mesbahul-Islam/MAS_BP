@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 import threading
 
@@ -9,10 +7,10 @@ from mesa.visualization import CommandConsole, SolaraViz, SpaceRenderer
 from mesa.visualization.components import AgentPortrayalStyle
 
 from config import (
+    MONITORING_OUTPUT_DIR,
+    MONITORING_TOPIC,
     SIM_SEED,
     TELEMETRY_ENDPOINT,
-    TELEMETRY_OUTPUT_DIR,
-    TELEMETRY_TOPIC,
 )
 from simulation.communication import run_telemetry_subscriber
 from simulation.agents.truck_agent import TruckAgent
@@ -28,7 +26,7 @@ CARGO_COLORS = {
 }
 
 
-def _ensure_background_subscriber() -> None:
+def _ensure_background_subscriber():
     """Start one telemetry subscriber per process for app-driven runs."""
     if os.environ.get("TELEMETRY_SUBSCRIBER_STARTED") == "1":
         return
@@ -37,8 +35,8 @@ def _ensure_background_subscriber() -> None:
         target=run_telemetry_subscriber,
         kwargs={
             "endpoint": TELEMETRY_ENDPOINT,
-            "topic": TELEMETRY_TOPIC,
-            "output_root": TELEMETRY_OUTPUT_DIR,
+            "topic": MONITORING_TOPIC,
+            "output_root": MONITORING_OUTPUT_DIR,
         },
         daemon=True,
         name="telemetry-subscriber",
@@ -47,7 +45,7 @@ def _ensure_background_subscriber() -> None:
     os.environ["TELEMETRY_SUBSCRIBER_STARTED"] = "1"
 
 
-def _wide_grid_layout(num_components: int):
+def _wide_grid_layout(num_components):
     """Use full-width, tall cards so the map fills the page."""
     return [
         {
@@ -75,27 +73,36 @@ def truck_portrayal(agent):
 
 
 def post_process_space(ax):
-    ax.figure.set_size_inches(20, 10)
-    ax.figure.set_dpi(120)
-    ax.figure.set_constrained_layout(False)
-    if hasattr(ax.figure, "set_layout_engine"):
-        ax.figure.set_layout_engine("constrained")
-    
-    # Use full axes area instead of preserving equal aspect ratio (which can letterbox).
+    # Solara manages figure layout; avoid figure-level resizing/layout mutations here.
+
+    # Keep geometry readable while still filling panel space.
     ax.set_aspect("auto")
     ax.set_title("Freight Truck Map")
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
+    ax.figure.set_size_inches(14, 7)
 
     x_values = [coords[0] for coords in NODE_COORDINATES.values()]
     y_values = [coords[1] for coords in NODE_COORDINATES.values()]
     x_min, x_max = min(x_values), max(x_values)
     y_min, y_max = min(y_values), max(y_values)
-    x_margin = (x_max - x_min) * 0.08 if x_max != x_min else 10.0
-    y_margin = (y_max - y_min) * 0.08 if y_max != y_min else 10.0
+    x_margin = (x_max - x_min) * 0.05 if x_max != x_min else 10.0
+    y_margin = (y_max - y_min) * 0.05 if y_max != y_min else 10.0
     ax.set_xlim(x_min - x_margin, x_max + x_margin)
     ax.set_ylim(y_min - y_margin, y_max + y_margin)
     ax.margins(x=0, y=0)
+
+    # Remove previously drawn static artists so redraws do not accumulate stale objects.
+    static_gids = {"static_route", "static_node", "static_node_label"}
+    for line in list(ax.lines):
+        if line.get_gid() in static_gids:
+            line.remove()
+    for patch in list(ax.patches):
+        if patch.get_gid() in static_gids:
+            patch.remove()
+    for text in list(ax.texts):
+        if text.get_gid() in static_gids:
+            text.remove()
 
     # Draw all route segments in the background.
     for route in ROUTES:
@@ -110,7 +117,14 @@ def post_process_space(ax):
         rect = patches.Rectangle((x - 10, y - 10), 20, 20, linewidth=1, edgecolor='black', facecolor='black', zorder=2)
         rect.set_gid("static_node")
         ax.add_patch(rect)
-        node_label = ax.text(x + 40, y + 20, node, fontsize=8, color="black")
+        node_label = ax.annotate(
+            node,
+            xy=(x, y),
+            xytext=(6, 6),
+            textcoords="offset points",
+            fontsize=8,
+            color="black",
+        )
         node_label.set_gid("static_node_label")
 
 

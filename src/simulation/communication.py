@@ -1,30 +1,30 @@
-from __future__ import annotations
-
 import json
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import cast
 
 from config import TELEMETRY_ENDPOINT, TELEMETRY_TOPIC
-from simulation.schemas import (
-	AgentEvent,
-	TRUCK_TELEMETRY_SCHEMA,
-	TruckTelemetryPayload,
-)
+from simulation.schemas import TRUCK_TELEMETRY_SCHEMA
 import zmq
 
 
 _publisher_lock = threading.Lock()
-_shared_publishers: dict[str, dict] = {}
+_shared_publishers = {}
 
 
 class ZeroMQTelemetryChannel:
 	"""Ephemeral ZeroMQ pub/sub channel for truck telemetry events."""
 
-	def __init__(self) -> None:
-		self.topic = TELEMETRY_TOPIC
-		self.endpoint = TELEMETRY_ENDPOINT
+	def __init__(
+		self,
+		*,
+		endpoint=TELEMETRY_ENDPOINT,
+		topic=TELEMETRY_TOPIC,
+		schema=TRUCK_TELEMETRY_SCHEMA,
+	):
+		self.topic = topic
+		self.endpoint = endpoint
+		self.schema = schema
 		self.message_id_counters = {}
 
 		with _publisher_lock:
@@ -59,7 +59,7 @@ class ZeroMQTelemetryChannel:
 				"ref_count": 1,
 			}
 
-	def publish(self, *, tick: int, source_agent: str, payload: TruckTelemetryPayload) -> AgentEvent:
+	def publish(self, *, tick, source_agent, payload):
 		"""Publish a telemetry event to subscribers.
 
 		Events are not stored in memory by this channel.
@@ -69,8 +69,8 @@ class ZeroMQTelemetryChannel:
 		message_id = self.message_id_counters.get(truck_key, 0)
 		self.message_id_counters[truck_key] = message_id + 1
 
-		event: AgentEvent = {
-			"schema": TRUCK_TELEMETRY_SCHEMA,
+		event = {
+			"schema": self.schema,
 			"message_id": message_id,
 			"timestamp_utc": datetime.now(timezone.utc).isoformat(),
 			"tick": tick,
@@ -83,7 +83,7 @@ class ZeroMQTelemetryChannel:
 		)
 		return event
 
-	def close(self) -> None:
+	def close(self):
 		with _publisher_lock:
 			shared = _shared_publishers.get(self.endpoint)
 			if not shared:
@@ -101,10 +101,15 @@ class ZeroMQTelemetryChannel:
 			_shared_publishers.pop(self.endpoint, None)
 
 
-def run_telemetry_subscriber(endpoint: str, topic: str, output_root: str) -> None:
-	"""Subscribe to telemetry events and append JSON lines into per-truck JSONL files."""
+def run_telemetry_subscriber(endpoint, topic, output_root):
+	"""Subscribe to a topic and append each event as a JSON line."""
 	output_base = Path(output_root)
 	output_base.mkdir(parents=True, exist_ok=True)
+	log_file = output_base / "output.json"
+
+	# Start each subscriber run with a clean output file.
+	with log_file.open("w", encoding="utf-8"):
+		pass
 
 	context = zmq.Context()
 	subscriber = context.socket(zmq.SUB)
@@ -112,17 +117,19 @@ def run_telemetry_subscriber(endpoint: str, topic: str, output_root: str) -> Non
 	subscriber.setsockopt_string(zmq.SUBSCRIBE, topic)
 
 	try:
+		last_tick = None
 		while True:
 			_ignored_topic, raw_payload = subscriber.recv_multipart()
-			payload = json.loads(raw_payload.decode("utf-8"))
-			event = cast(AgentEvent, payload)
-			if event["schema"] != TRUCK_TELEMETRY_SCHEMA:
-				continue
-			truck_payload = cast(TruckTelemetryPayload, event["payload"])
+			event = json.loads(raw_payload.decode("utf-8"))
 
-			truck_id = str(truck_payload["truck_id"])
-			log_file = output_base / f"truck_{truck_id}" / "output.jsonl"
-			log_file.parent.mkdir(parents=True, exist_ok=True)
+			# If tick goes backwards, a new simulation run started: clear old logs.
+			event_tick = event.get("tick")
+			if isinstance(event_tick, int):
+				if last_tick is not None and event_tick < last_tick:
+					with log_file.open("w", encoding="utf-8"):
+						pass
+				last_tick = event_tick
+
 			with log_file.open("a", encoding="utf-8") as handle:
 				handle.write(json.dumps(event))
 				handle.write("\n")

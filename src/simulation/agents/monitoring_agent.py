@@ -1,19 +1,27 @@
 from mesa import Agent
+from config import TELEMETRY_PUBLISH_EVERY_TICKS
 from simulation.agents.truck_agent import TruckAgent
-from simulation.schemas import TruckTelemetryPayload
+from simulation.communication import ZeroMQTelemetryChannel
 
 class MonitoringAgent(Agent):
     
-    def __init__(self, model):
+    def __init__(self, model, telemetry_channel, monitoring_channel):
         super().__init__(model)
+        self.agent_name = f"monitoring_{self.unique_id}"
+        self.telemetry_channel = telemetry_channel
+        self.monitoring_channel = monitoring_channel
 
     def step(self):
+        snapshots = []
+        current_tick = getattr(self.model, "tick", 0)
+
+        if current_tick % TELEMETRY_PUBLISH_EVERY_TICKS != 0:
+            return
         
         for agent in self.model.agents:
             if isinstance(agent, TruckAgent):
 
-                current_tick = getattr(self.model, "tick", 0)
-                telemetry_snapshot: TruckTelemetryPayload = {
+                telemetry_snapshot = {
                     "truck_id": str(agent.fields.truck_id),
                     "cargo_type": agent.fields.cargo_type,
                     "tick": current_tick,
@@ -24,21 +32,27 @@ class MonitoringAgent(Agent):
                     "door_open": agent.fields.door_open,
                 }
 
-                monitoring_snapshot = {
-                    "truck_id": telemetry_snapshot["truck_id"],
-                    "tick": telemetry_snapshot["tick"],
-                    "speed": telemetry_snapshot["speed_kmh"] / 100.0,
-                    "temperature": telemetry_snapshot["temperature_c"] / 50.0,
-                    "co2": telemetry_snapshot["co2_ppm"] / 2000.0,
-                    "door_open": 1 if telemetry_snapshot["door_open"] else 0,
-                }
 
                 analysis_snapshot = {
-                    "truck_id": monitoring_snapshot["truck_id"],
-                    "tick": monitoring_snapshot["tick"],
-                    "monitoring_snapshot": monitoring_snapshot,
+                    "truck_id": telemetry_snapshot["truck_id"],
+                    "tick": telemetry_snapshot["tick"],
                     "telemetry_snapshot": telemetry_snapshot,
                 }
+                
+                snapshots.append(analysis_snapshot)
+
+        # Aggregate and publish to monitoring channel
+        if snapshots:
+            aggregated_payload = {
+                "tick": current_tick,
+                "snapshots": snapshots,
+            }
+            
+            self.monitoring_channel.publish(
+                tick=current_tick,
+                source_agent=self.agent_name,
+                payload=aggregated_payload,
+            )
 
                 
 

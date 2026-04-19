@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import time
 
 from config import (
@@ -12,7 +10,7 @@ from simulation.model import FreightSimulationModel
 from simulation.agents.truck_agent import TruckAgent
 
 
-def print_tick_summary(model: FreightSimulationModel) -> None:
+def print_tick_summary(model):
     trucks = sorted([agent for agent in model.agents if isinstance(agent, TruckAgent)], key=lambda truck: truck.fields.truck_id)
     print(f"Tick {model.tick:05d}")
     for truck in trucks:
@@ -34,7 +32,7 @@ def main():
     time.sleep(SIM_PUBSUB_STARTUP_DELAY_SECONDS)
 
     try:
-        while SIM_MAX_TICKS <= 0 or model.tick < SIM_MAX_TICKS:
+        while model.running and (SIM_MAX_TICKS <= 0 or model.tick < SIM_MAX_TICKS):
             tick_start = time.monotonic()
             model.step()
 

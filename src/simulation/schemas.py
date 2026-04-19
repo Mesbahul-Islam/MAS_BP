@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TypedDict
+from typing import Any, TypedDict
 
 
 TRUCK_TELEMETRY_SCHEMA = "truck.telemetry.v1"
@@ -27,4 +27,4 @@ class AgentEvent(TypedDict):
     timestamp_utc: str
     tick: int
     source_agent: str
-    payload: TruckTelemetryPayload
+    payload: dict[str, Any]

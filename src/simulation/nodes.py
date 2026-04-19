@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 # Shared coordinate map for all simulation nodes.
 NODE_COORDINATES = {
     "A": (0.0, 0.0),
