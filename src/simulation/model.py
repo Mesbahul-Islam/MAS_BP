@@ -1,17 +1,27 @@
-from config import (
-    MONITORING_TOPIC,
-    SIM_ACTIVE_SCENARIO,
-    SIM_NUM_TRUCKS,
-    SIM_SCENARIOS,
-)
+import os
+import sys
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+
+
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+try:
+    from config import MONITORING_TOPIC, SIM_ACTIVE_SCENARIO, SIM_NUM_TRUCKS, SIM_SCENARIOS
+except ImportError:
+    # Jos olet 'src' paketin sisällä, kokeile tätä:
+    from src.config import MONITORING_TOPIC, SIM_ACTIVE_SCENARIO, SIM_NUM_TRUCKS, SIM_SCENARIOS
 from mesa import Model
 from mesa.space import ContinuousSpace
 
-from simulation.agents.truck_agent import TruckAgent
-from simulation.agents.route_analysis_agent import RouteAnalysisAgent
-from simulation.communication import ZeroMQTelemetryChannel
-from simulation.nodes import NODE_COORDINATES, ROUTES
-from simulation.agents.monitoring_agent import MonitoringAgent
+from src.simulation.agents.truck_agent import TruckAgent
+from src.simulation.agents.route_analysis_agent import RouteAnalysisAgent
+from src.simulation.communication import ZeroMQTelemetryChannel
+from src.simulation.nodes import NODE_COORDINATES, ROUTES
+from src.simulation.agents.monitoring_agent import MonitoringAgent
 
 
 

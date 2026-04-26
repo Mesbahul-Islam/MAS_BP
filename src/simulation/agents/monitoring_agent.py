@@ -1,5 +1,8 @@
 from mesa import Agent
-from config import TELEMETRY_PUBLISH_EVERY_TICKS
+try:
+    from config import TELEMETRY_PUBLISH_EVERY_TICKS
+except ImportError:
+    from src.config import TELEMETRY_PUBLISH_EVERY_TICKS
 from simulation.agents.truck_agent import TruckAgent
 from simulation.communication import ZeroMQTelemetryChannel
 
