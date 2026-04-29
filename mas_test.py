@@ -1,89 +1,120 @@
-import getpass
 import os
 import json
+from langchain_google_genai import ChatGoogleGenerativeAI
 
-#if "GOOGLE_API_KEY" not in os.environ:
- #   os.environ["GOOGLE_API_KEY"] = "AIzaSyBRq2kF4d0ZDAa-B0d0pWpSiwVhUYQFdks"
-
-if not os.getenv("OPENROUTER_API_KEY"):
-    os.environ["OPENROUTER_API_KEY"] = "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"
+if "GOOGLE_API_KEY" not in os.environ:
+    os.environ["GOOGLE_API_KEY"] = "AIzaSyBZhfJoMC866Ah7bW4cGKIcgxT4IvzT00s"
 
 #gemini api AIzaSyBZhfJoMC866Ah7bW4cGKIcgxT4IvzT00s
-#gemini api AIzaSyBRq2kF4d0ZDAa-B0d0pWpSiwVhUYQFdks
-#pip install -U langchain  
 #pip install -U langchain-google-genai
-#pip install langchain-openrouter
 #pip install -qU langchain-community
+
+# Data loading into dict without preprocessing
+data = {}
+
+with open("output.jsonl") as f:
+    for i, line in enumerate(f):
+        data[i] = json.loads(line)
+        
+        
+# Preprocessing data by metadata filtering?
+#processed_data = []
+
+#with open("output.jsonl") as f:
+    #for line in f:
+        #row = json.loads(line)
+        
+        #for snap in row["payload"]["snapshots"]:
+            #ts = snap["telemetry_snapshot"]
+            
+            #processed_data.append({
+                #"truck_id": ts["truck_id"],
+                #"tick": ts["tick"],
+                #"speed_kmh": ts["speed_kmh"],
+                #"temperature_c": ts["temperature_c"],
+                #"co2_ppm": ts["co2_ppm"],
+                #"door_open": ts["door_open"],
+                #"position": ts["position"]
+            #})
 
 
 #from langchain_community.agent_toolkits import JsonToolkit, create_json_agent
 #from langchain_community.tools.json.tool import JsonSpec
+#from langchain_openai import OpenAI
 
+#json_spec = JsonSpec(dict_=data)
+#json_toolkit = JsonToolkit(spec=json_spec)
 
-data = {}
+#llm = OpenAI(temperature=0)
 
-with open ("output.jsonl", 'r') as f:
-   for line in f:
-        data.update(json.loads(line))
-
-#json_spec = JsonSpec(dict_= data)
-#json_toolkit = JsonToolkit(spec= json_spec)
-
-
-#from langchain_google_genai import ChatGoogleGenerativeAI
-
-#model = ChatGoogleGenerativeAI(
- #   model="gemini-2.5-flash",
-  #  temperature=1.0,  # Gemini 3.0+ defaults to 1.0
-   # max_tokens=None,
-    #timeout=None,
-   # max_retries=2,
-    # other params...
+#json_agent_executor = create_json_agent(
+    #llm=llm,
+    #toolkit=json_toolkit,
+    #verbose=True
 #)
 
-from langchain_openrouter import ChatOpenRouter
-
-model2 = ChatOpenRouter(
-    model="inclusionai/ling-2.6-flash:free",
-    temperature=0,
-    max_tokens=1024,
-    
+model = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash-lite",
+    temperature=0.3,
+    max_retries=2,
 )
 
-#json_agent_executor = create_json_agent(model2, json_toolkit, handle_parsing_errors=True)
-
-#try:
-#        response = json_agent_executor.invoke("Are there any anomalities?")
-#    except Exception as e:
-#        response = str(e)
-#        if response.startswith("Could not parse LLM output: `"):
-#                 response = response.removeprefix("Could not parse LLM output: `").removesuffix("`")
-#                 print(response)
 
 def route_analysis_agent() -> str:
-    response = model2.invoke(f"Is there a difference between delivery speeds:\n{data}")   
-    print (response.content)
+    prompt = f"""
+    You are a real-time fleet anomaly detection system.
+    
+    Analyze the state based on the following instructions:
+    - Focus only on abnormal behaviour
+    - Do not add anything additional outside the required format
+    - If no anomalies are detected, return OK
+    
+    Return the output only in this format:
+    truck_id:
+    issues:
+    severity: LOW/MEDIUM/HIGH
+    reason:
+    overall_system_status: OK/WARNING/CRITICAL
+    
+    Telemetry for analysis:
+    {json.dumps(data, indent=2)}
+    
+    """
+    response = model.invoke(prompt)
     return response.content
+
 
 def cargo_safety_agent() -> str:
+
+    prompt = f"""
+    You are a cargo safety monitoring AI.
+
+    Analyze the truck telemetry and detect safety risks.
+
+    Telemetry:
+    {json.dumps(data, indent=2)}
     
-    response = model2.invoke(f"Is there a difference in temperatures:\n{data}") 
-    print(response.content)        
+    """
+
+    response = model.invoke(prompt)
     return response.content
 
-def orchestrator_agent(prompt: str) -> str:    
-    
-    if "route" in question:
+
+def orchestrator_agent(prompt: str) -> str:
+
+    prompt_lower = prompt.lower()
+
+    if "route" in prompt_lower:
         return route_analysis_agent()
-    if "cargo" in question:
+
+    if "cargo" in prompt_lower:
         return cargo_safety_agent()
 
-    response = model.invoke([HumanMessage(content=question)])
-    return response.content
+    return "Unknown request"
 
 
-#question = "route"
-question = "cargo"
-answer = orchestrator_agent(question)
-
-print(answer)
+if __name__ == "__main__":
+    question = "route"
+    answer = orchestrator_agent(question)
+    print(answer)
+    
