@@ -1,11 +1,9 @@
 import os
 import json
-from langchain_google_genai import ChatGoogleGenerativeAI
+from dotenv import load_dotenv
 
-if "GOOGLE_API_KEY" not in os.environ:
-    os.environ["GOOGLE_API_KEY"] = "AIzaSyBZhfJoMC866Ah7bW4cGKIcgxT4IvzT00s"
 
-#gemini api AIzaSyBZhfJoMC866Ah7bW4cGKIcgxT4IvzT00s
+#pip install -U langchain  
 #pip install -U langchain-google-genai
 #pip install -qU langchain-community
 
@@ -42,8 +40,9 @@ with open("output.jsonl") as f:
 #from langchain_community.tools.json.tool import JsonSpec
 #from langchain_openai import OpenAI
 
-#json_spec = JsonSpec(dict_=data)
-#json_toolkit = JsonToolkit(spec=json_spec)
+#os.environ["OPENROUTER_API_KEY"] = os.getenv("OPENROUTER_API_KEY")
+load_dotenv()  # Load environment variables from .env file
+print("Using OPENROUTER_API_KEY:", os.getenv("OPENROUTER_API_KEY"))
 
 #llm = OpenAI(temperature=0)
 

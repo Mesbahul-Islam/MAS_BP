@@ -1,28 +1,22 @@
-import os
-import sys
-
-current_dir = os.path.dirname(os.path.abspath(__file__))
-
-project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
-
-
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-try:
-    from config import MONITORING_TOPIC, SIM_ACTIVE_SCENARIO, SIM_NUM_TRUCKS, SIM_SCENARIOS
-except ImportError:
-    # Jos olet 'src' paketin sisällä, kokeile tätä:
-    from src.config import MONITORING_TOPIC, SIM_ACTIVE_SCENARIO, SIM_NUM_TRUCKS, SIM_SCENARIOS
+from config import (
+    MONITORING_TOPIC,
+    SIM_ACTIVE_SCENARIO,
+    SIM_NUM_TRUCKS,
+    SIM_SCENARIOS,
+    TELEMETRY_ENDPOINT,
+    TELEMETRY_TOPIC,
+    MONITORING_OUTPUT_DIR
+)
 from mesa import Model
 from mesa.space import ContinuousSpace
 
-from src.simulation.agents.truck_agent import TruckAgent
-from src.simulation.agents.route_analysis_agent import RouteAnalysisAgent
-from src.simulation.communication import ZeroMQTelemetryChannel
-from src.simulation.nodes import NODE_COORDINATES, ROUTES
-from src.simulation.agents.monitoring_agent import MonitoringAgent
-
+from simulation.agents.truck_agent import TruckAgent
+from simulation.agents.route_analysis_agent import RouteAnalysisAgent
+from simulation.communication import ZeroMQTelemetryChannel
+from simulation.nodes import NODE_COORDINATES, ROUTES
+from simulation.agents.monitoring_agent import MonitoringAgent
+from simulation.schemas import TRUCK_TELEMETRY_SCHEMA
+from simulation.communication import run_telemetry_subscriber
 
 
 class FreightSimulationModel(Model):
@@ -62,10 +56,15 @@ class FreightSimulationModel(Model):
         routes_for_trucks = [candidate_routes[i % len(candidate_routes)] for i in range(self.num_trucks)]
 
         # telemetry pub/sub channel (ZeroMQ).
-        self.telemetry_channel = ZeroMQTelemetryChannel()
+        self.telemetry_channel = ZeroMQTelemetryChannel(
+            endpoint=TELEMETRY_ENDPOINT,
+            topic=TELEMETRY_TOPIC,
+            schema=TRUCK_TELEMETRY_SCHEMA,
+        )
         self.monitoring_channel = ZeroMQTelemetryChannel(
+            endpoint=TELEMETRY_ENDPOINT,
             topic=MONITORING_TOPIC,
-            schema="monitoring.snapshot.v1",
+            schema=None,
         )
 
         # Create trucks, passing the per-agent `route` sequence so each agent gets its own route.
@@ -85,7 +84,7 @@ class FreightSimulationModel(Model):
             telemetry_channel=self.telemetry_channel,
             monitoring_channel=self.monitoring_channel,
         )
-
+        
         RouteAnalysisAgent(self)
 
         # Place all agents in the renderer-backed space.

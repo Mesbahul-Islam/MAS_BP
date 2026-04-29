@@ -3,7 +3,7 @@ from mesa import Agent
 from config import SIM_ACTIVE_SCENARIO, TELEMETRY_PUBLISH_EVERY_TICKS
 from simulation.communication import ZeroMQTelemetryChannel
 from simulation.nodes import NODE_COORDINATES
-
+from langchain_openrouter import ChatOpenRouter
 
 class TruckFields:
     def __init__(self, truck_id, cargo_type, route, position, speed_kmh, temperature_c, co2_ppm, door_open, comm_online, current_route_index):
@@ -12,7 +12,7 @@ class TruckFields:
         self.route = route
         self.position = position
         self.speed_kmh = speed_kmh
-        self.cruise_speed_kmh = speed_kmh
+        self.cruise_speed_kmh = speed_kmh  # Store original speed for resuming after anomalies
         self.temperature_c = temperature_c
         self.co2_ppm = co2_ppm
         self.door_open = door_open
