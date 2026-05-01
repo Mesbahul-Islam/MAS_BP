@@ -1,6 +1,6 @@
 mesa[rec]
 pyzmq
 langchain
-langchain-openrouter
 deepagents
 python-dotenv
+langchain-ollama

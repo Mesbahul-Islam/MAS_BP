@@ -24,9 +24,10 @@ class RouteAnalysisAgent(Agent):
     """Analyzes route telemetry using an LLM running in a background thread
     """
 
-    def __init__(self, model):
+    def __init__(self, model, output_channel):
         super().__init__(model)
         self.agent_name = f"route_analysis_{self.unique_id}"
+        self.output_channel = output_channel
         
         # system prompt for ai agents
         self.prompt = SystemMessage(
@@ -131,11 +132,11 @@ class RouteAnalysisAgent(Agent):
             
         for snapshot in payload_entries:
             if isinstance(snapshot, dict):
-                self.queue_snapshot_for_analysis(snapshot)
+                self.queue_snapshot_for_analysis(snapshot, current_tick)
 
         self._last_analyzed_tick = current_tick
 
-    def queue_snapshot_for_analysis(self, snapshot):
+    def queue_snapshot_for_analysis(self, snapshot, tick):
         """Packages recent snapshots and sends them to the worker queue."""
         history = list(self._recent_snapshots)[-3:]
         if not history:
@@ -144,7 +145,7 @@ class RouteAnalysisAgent(Agent):
         context_str = json.dumps(history, ensure_ascii=True)
         #If the queue is full (LLM is busy), gracefully drop the frame
         try:
-            self._analysis_queue.put_nowait(context_str)
+            self._analysis_queue.put_nowait((context_str, tick))
         except queue.Full:
             pass 
 
@@ -152,13 +153,21 @@ class RouteAnalysisAgent(Agent):
         """Background thread that consumes the queue one by one."""
         while True:
             try:
-                snapshot_context = self._analysis_queue.get()
-                if snapshot_context is None:
+                item = self._analysis_queue.get()
+                if item is None:
                     break
+                
+                snapshot_context, tick = item
                     
                 hypothesis = self.fetch_llm_hypothesis(snapshot_context)
                 if hypothesis:
-                    # Thread-safe enough appending operation for Mesa models
+                    # Publish observation to Orchestrator topics
+                    if self.output_channel:
+                        self.output_channel.publish(
+                            tick=tick, 
+                            source_agent=self.agent_name, 
+                            payload=hypothesis
+                        )
                     self.model.route_analysis_hypotheses.append(hypothesis)
             except Exception as e:
                 print(f"Analysis worker error: {e}")

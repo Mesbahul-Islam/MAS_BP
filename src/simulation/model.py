@@ -5,13 +5,17 @@ from config import (
     SIM_SCENARIOS,
     TELEMETRY_ENDPOINT,
     TELEMETRY_TOPIC,
-    MONITORING_OUTPUT_DIR
+    MONITORING_OUTPUT_DIR,
+    ROUTE_ANALYSIS_TOPIC,
+    CARGO_SAFETY_TOPIC,
+    ORCHESTRATOR_TOPIC,
 )
 from mesa import Model
 from mesa.space import ContinuousSpace
 
 from simulation.agents.truck_agent import TruckAgent
-from simulation.agents.route_analysis_agent import RouteAnalysisAgent
+from simulation.agents.monitoring_agent import MonitoringAgent
+from simulation.agents.orchestrator_agent import OrchestratorAgent
 from simulation.communication import ZeroMQTelemetryChannel
 from simulation.nodes import NODE_COORDINATES, ROUTES
 from simulation.agents.monitoring_agent import MonitoringAgent
@@ -35,6 +39,8 @@ class FreightSimulationModel(Model):
         self.running = True
         self.latest_monitoring_payload = None
         self.route_analysis_hypotheses = []
+        self.cargo_safety_hypotheses = []
+        self.orchestrator_verdicts = []
         # Simulation tick counter (increments each model.step())
         self.tick = 0
         candidate_routes = SIM_SCENARIOS.get(SIM_ACTIVE_SCENARIO)
@@ -66,6 +72,23 @@ class FreightSimulationModel(Model):
             topic=MONITORING_TOPIC,
             schema=None,
         )
+        
+        # Output channels for inter-agent communication
+        self.route_analysis_channel = ZeroMQTelemetryChannel(
+            endpoint=TELEMETRY_ENDPOINT,
+            topic=ROUTE_ANALYSIS_TOPIC,
+            schema=None,
+        )
+        self.cargo_safety_channel = ZeroMQTelemetryChannel(
+            endpoint=TELEMETRY_ENDPOINT,
+            topic=CARGO_SAFETY_TOPIC,
+            schema=None,
+        )
+        self.orchestrator_channel = ZeroMQTelemetryChannel(
+            endpoint=TELEMETRY_ENDPOINT,
+            topic=ORCHESTRATOR_TOPIC,
+            schema=None,
+        )
 
         # Create trucks, passing the per-agent `route` sequence so each agent gets its own route.
         TruckAgent.create_agents(
@@ -85,7 +108,7 @@ class FreightSimulationModel(Model):
             monitoring_channel=self.monitoring_channel,
         )
         
-        RouteAnalysisAgent(self)
+        OrchestratorAgent(self, output_channel=self.orchestrator_channel)
 
         # Place all agents in the renderer-backed space.
         for agent in self.agents:
@@ -117,3 +140,6 @@ class FreightSimulationModel(Model):
         """Release ZeroMQ telemetry resources."""
         self.telemetry_channel.close()
         self.monitoring_channel.close()
+        self.route_analysis_channel.close()
+        self.cargo_safety_channel.close()
+        self.orchestrator_channel.close()
