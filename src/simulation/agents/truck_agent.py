@@ -37,7 +37,7 @@ class TruckAgent(Agent):
             position=NODE_COORDINATES[route[0]],
             speed_kmh=round(random.uniform(60.0, 100.0), 2),
             temperature_c=20.0,
-            co2_ppm=400.0,
+            co2_ppm=250.0,
             door_open=False,
             comm_online=True,
             current_route_index=0,

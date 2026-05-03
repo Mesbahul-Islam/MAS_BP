@@ -1,6 +1,17 @@
 import os
 import threading
 
+import solara
+
+# Monkey-patch Solara's SliderInt to change Play Interval limits
+original_slider_int = solara.SliderInt
+def custom_slider_int(*args, **kwargs):
+    if kwargs.get("label") == "Play Interval (ms)":
+        kwargs["min"] = 300
+        kwargs["max"] = 1000
+    return original_slider_int(*args, **kwargs)
+solara.SliderInt = custom_slider_int
+
 import matplotlib.patches as patches
 import mesa.visualization.solara_viz as solara_viz_module
 from mesa.visualization import CommandConsole, SolaraViz, SpaceRenderer
@@ -114,9 +125,6 @@ def post_process_space(ax):
 
     # Draw node markers and labels.
     for node, (x, y) in NODE_COORDINATES.items():
-        rect = patches.Rectangle((x - 10, y - 10), 20, 20, linewidth=1, edgecolor='black', facecolor='black', zorder=2)
-        rect.set_gid("static_node")
-        ax.add_patch(rect)
         node_label = ax.annotate(
             node,
             xy=(x, y),
@@ -157,6 +165,7 @@ page = SolaraViz(
     components=[CommandConsole],
     model_params=model_params,
     name="Freight Simulation Map",
+    play_interval=300,
 )
 
 page

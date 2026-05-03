@@ -1,6 +1,7 @@
 mesa[rec]
 pyzmq
 langchain
-deepagents
 python-dotenv
 langchain-ollama
+langgraph
+pydantic
