@@ -1,5 +1,7 @@
 import os
 import threading
+import solara
+import pandas as pd
 
 import matplotlib.patches as patches
 import mesa.visualization.solara_viz as solara_viz_module
@@ -61,8 +63,7 @@ def _wide_grid_layout(num_components):
 
 
 def truck_portrayal(agent):
-    if agent is None or not isinstance(agent, TruckAgent):
-        return None
+   if isinstance(agent, TruckAgent):
 
     return AgentPortrayalStyle(
         marker="o",
@@ -70,6 +71,8 @@ def truck_portrayal(agent):
         size=50,
         zorder=3,
     )
+    return AgentPortrayalStyle(marker="o", size=0)
+
 
 
 def post_process_space(ax):
@@ -142,21 +145,33 @@ model = FreightSimulationModel(rng=SIM_SEED)
 
 # Make the Solara cards fill available width/height.
 solara_viz_module.make_initial_grid_layout = _wide_grid_layout
+@solara.component
+def Page():
+    _ensure_background_subscriber()
 
-renderer = SpaceRenderer(
-    model,
-    backend="matplotlib",
-).setup_agents(truck_portrayal)
-renderer.post_process = post_process_space
-# Trigger an initial artist build so agent markers remain visible after first tick.
-renderer.draw_agents()
+    model = solara.use_memo(lambda: FreightSimulationModel(rng=SIM_SEED), [])
 
-page = SolaraViz(
-    model,
-    renderer,
-    components=[CommandConsole],
-    model_params=model_params,
-    name="Freight Simulation Map",
-)
+    renderer = solara.use_memo(lambda: SpaceRenderer(model, backend="matplotlib").setup_agents(truck_portrayal), [])
+    renderer.post_process = post_process_space
+    
+    viz = SolaraViz(
+        model,
+        renderer,
+        components=[CommandConsole],
+        model_params=model_params,
+        name="Freight Simulation Map",
+    )
 
-page
+    with solara.Column(style={"padding": "20px"}):
+        solara.Title("Freight Monitoring System")
+        
+        with solara.Card():
+            viz 
+        
+        solara.Markdown("---")
+        with solara.Card("Fleet Status Table"):
+            solara.Markdown("Table data here...")
+
+page = Page
+
+

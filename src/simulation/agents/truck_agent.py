@@ -3,7 +3,6 @@ from mesa import Agent
 from config import SIM_ACTIVE_SCENARIO, TELEMETRY_PUBLISH_EVERY_TICKS
 from simulation.communication import ZeroMQTelemetryChannel
 from simulation.nodes import NODE_COORDINATES
-from langchain_openrouter import ChatOpenRouter
 
 class TruckFields:
     def __init__(self, truck_id, cargo_type, route, position, speed_kmh, temperature_c, co2_ppm, door_open, comm_online, current_route_index):

@@ -85,7 +85,7 @@ class FreightSimulationModel(Model):
             monitoring_channel=self.monitoring_channel,
         )
         
-        RouteAnalysisAgent(self)
+        #RouteAnalysisAgent(self)
 
         # Place all agents in the renderer-backed space.
         for agent in self.agents:
