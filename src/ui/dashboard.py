@@ -113,12 +113,14 @@ def MASDashboard(model):
                     Graph(state=current_state)
                 
                 if verdict:
-                    with solara.Card("Orchestrator Verdict", style="background-color: #f0f7ff;"):
-                        solara.Markdown(f"### Result: {verdict.get('verdict', 'Normal')}")
-                        solara.Markdown(f"**Action Plan:** {verdict.get('action_plan', 'Continuing monitoring.')}")
+                    with solara.Card("Orchestrator Verdict", style="background-color: #f0f7ff; color: #1a1a1a; padding: 12px;"):
+                        solara.Markdown(f"### Result: {verdict.get('verdict', 'Normal')}",
+                                        style="color: #1a1a1a;")
+                        solara.Markdown(f"**Action Plan:** {verdict.get('action_plan', 'Continuing monitoring.')}",
+                                        style="color: #1a1a1a;")
 
                 # Step 3: Show the agents on top of each other using Column for the current round
-                with solara.Card(f"Current Round Reasoning (Iteration {current_iter})", style="background-color: #f9f9f9;"):
+                with solara.Card(f"Current Round Reasoning (Iteration {current_iter})", style="background-color: #f9f9f9; color: #1a1a1a; padding: 12px;"):
                     with solara.Column(style={
                         "transform": "scale(0.9)",  
                         "transform-origin": "top left",
