@@ -59,9 +59,13 @@ class DecisionEngine:
     def __init__(self, llm=None):
         # Initialize the base LLM model
         if llm is None:
+            from config import OLLAMA_BASE_URL, OLLAMA_MODEL
             self.llm = ChatOllama(
-                model="qwen3.5:0.8b", temperature=0.5, streaming=True,
-                base_url="http://192.168.144.153:11434", reasoning=False
+                model=OLLAMA_MODEL, 
+                temperature=0.5, 
+                streaming=True,
+                base_url=OLLAMA_BASE_URL, 
+                reasoning=False
             )
         else:
             self.llm = llm

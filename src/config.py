@@ -1,6 +1,12 @@
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path="../.env")
+
+import os
+# LLM configuration
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3.5:0.8b")
+
 # ZeroMQ telemetry channel configuration
 TELEMETRY_ENDPOINT = "tcp://127.0.0.1:5590"
 TELEMETRY_TOPIC = "telemetry.truck"
