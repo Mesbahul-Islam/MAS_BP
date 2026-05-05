@@ -149,10 +149,15 @@ solara_viz_module.make_initial_grid_layout = _wide_grid_layout
 def Page():
     _ensure_background_subscriber()
 
+    steps = solara.use_reactive(0)
+
     model = solara.use_memo(lambda: FreightSimulationModel(rng=SIM_SEED), [])
 
     renderer = solara.use_memo(lambda: SpaceRenderer(model, backend="matplotlib").setup_agents(truck_portrayal), [])
     renderer.post_process = post_process_space
+
+    def on_step():
+        steps.value = model.schedule.steps
     
     viz = SolaraViz(
         model,
@@ -189,7 +194,7 @@ def Page():
         #Anomaly notification (if bad_truck_id exists)
         if hasattr(model, 'bad_truck_id') and model.bad_truck_id is not None:
              solara.Error(f"⚠️ ANOMALY DETECTED: Truck {model.bad_truck_id}")
-             
+
 page = Page
 
 
