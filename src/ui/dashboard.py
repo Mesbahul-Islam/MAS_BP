@@ -117,9 +117,12 @@ def MASDashboard(model):
                         solara.Markdown(f"### Result: {verdict.get('verdict', 'Normal')}")
                         solara.Markdown(f"**Action Plan:** {verdict.get('action_plan', 'Continuing monitoring.')}")
 
-                # Step 3: Show the agents side by side using Columns for the current round
+                # Step 3: Show the agents on top of each other using Column for the current round
                 with solara.Card(f"Current Round Reasoning (Iteration {current_iter})", style="background-color: #f9f9f9;"):
-                    with solara.Columns([1, 1]):
+                    with solara.Column(style={
+                        "transform": "scale(0.9)",  
+                        "transform-origin": "top left",
+                }):
                         # Sort alphabetically so the agents stay in the same position
                         for prop in sorted(active_proposals, key=lambda x: x['sender']):
                             AgentReasoningCard(prop)
