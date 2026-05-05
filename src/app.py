@@ -170,8 +170,26 @@ def Page():
         
         solara.Markdown("---")
         with solara.Card("Fleet Status Table"):
-            solara.Markdown("Table data here...")
+            truck_data = []
+            for agent in model.agents:
+                if isinstance(agent, TruckAgent):
+                    truck_data.append({
+                        "Truck ID": agent.fields.truck_id,
+                        "Cargo": agent.fields.cargo_type,
+                        "X": round(agent.fields.position[0], 1),
+                        "Y": round(agent.fields.position[1], 1),
+                        "Status": "Moving" if model.running else "Arrived"
+                    })
+            
+            if truck_data:
+                solara.DataFrame(pd.DataFrame(truck_data))
+            else:
+                solara.Info("Waiting for agents to initialize...")
 
+        #Anomaly notification (if bad_truck_id exists)
+        if hasattr(model, 'bad_truck_id') and model.bad_truck_id is not None:
+             solara.Error(f"⚠️ ANOMALY DETECTED: Truck {model.bad_truck_id}")
+             
 page = Page
 
 
