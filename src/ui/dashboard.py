@@ -1,123 +1,152 @@
-import os
-import sys
+import matplotlib.pyplot as plt
 import solara
-import pandas as pd
 import time
-
-# --- ENVIRONMENT SETUP ---
-# Ensure the project root is in sys.path to allow absolute imports from 'src'
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# Internal project imports
-from src.simulation.model import FreightSimulationModel
-from src.simulation.agents.truck_agent import TruckAgent
-from config import SIM_SEED
-
-class SimulationDashboard:
-    """
-    UI Components for the Freight Transport Monitoring System.
-    Encapsulates the rendering logic for controls and data tables.
-    """
-    def __init__(self, model_state):
-        # model_state is a solara.reactive object holding the Mesa model
-        self.model_state = model_state
-
-    def render_controls(self, model, is_running):
-        """
-        Renders the control panel with start/stop toggle and manual step.
-        """
-        with solara.Card("Simulation Control", style={"min-width": "300px"}):
-            solara.Markdown(f"### Current Tick: {model.tick}")
-            
-            # Toggle between Start and Stop based on is_running state
-            if not is_running.value:
-                solara.Button("START LIVE FEED", color="success", 
-                              on_click=lambda: is_running.set(True))
-            else:
-                solara.Button("STOP LIVE FEED", color="error", 
-                              on_click=lambda: is_running.set(False))
-            
-            # Manual step button for debugging or incremental observation
-            solara.Button("Manual Step", on_click=lambda: model.step(), 
-                          style={"margin-top": "10px"}, text=True)
-
-            # Anomaly UI: Displays a warning if the model detects a bad truck
-            if hasattr(model, 'bad_truck_id') and model.bad_truck_id:
-                solara.Error(f"⚠️ Anomaly Detected: Truck {model.bad_truck_id}", 
-                             style={"margin-top": "20px"})
-
-    def render_table(self, model):
-        """
-        Extracts agent data from the Mesa model and displays it in a DataFrame.
-        """
-        truck_data = []
-        for agent in model.agents:
-            if isinstance(agent, TruckAgent):
-                # Access fields from the TruckAgent instance
-                truck_data.append({
-                    "Truck ID": agent.fields.truck_id,
-                    "Pos X": round(agent.fields.position[0], 2),
-                    "Pos Y": round(agent.fields.position[1], 2),
-                    "Cargo": agent.fields.cargo_type,
-                    "Status": "Moving" if not model._all_trucks_reached_goal() else "Arrived"                })
-        
-        with solara.Card("Fleet Real-time Status"):
-            if truck_data:
-                solara.DataFrame(pd.DataFrame(truck_data), items_per_page=5)
-            else:
-                solara.Info("Waiting for agents to initialize...")
-
-    def build_layout(self, is_running):
-        """
-        Main layout builder that organizes the dashboard structure.
-        """
-        model = self.model_state.value
-        with solara.Column(style={"gap": "20px"}):
-            solara.Title("Freight Transport Monitoring System")
-            with solara.Row(gap="20px"):
-                self.render_controls(model, is_running)
-                with solara.Column(style={"flex-grow": "1"}):
-                    self.render_table(model)
-
-# --- SOLARA APPLICATION ENTRY POINT ---
+from ui.graph import Graph
 
 @solara.component
-def Page():
-    """
-    Main component that manages the simulation lifecycle and reactive state.
-    """
-    # Reactive states for the model instance and the execution loop
-    model_instance = solara.use_memo(lambda: FreightSimulationModel(rng=SIM_SEED), [])
-    model_state = solara.use_reactive(model_instance)
-    is_running = solara.use_reactive(False)
-
-    # Instantiate the dashboard helper class
-    ui_instance = solara.use_memo(lambda: SimulationDashboard(model_state), [])
-
-    def simulation_loop():
-        """
-        Background thread that advances the model while is_running is True.
-        """
-        while is_running.value:
-            # Advance simulation by one step
-            model_state.value.step()
+def RiskHistoryChart(all_proposals):
+    if not all_proposals:
+        return solara.Markdown("No data available yet.")
+        
+    # Group by agent and iteration
+    agent_data = {}
+    for p in all_proposals:
+        sender = p.get("sender", "Unknown")
+        it = p.get("iteration", 0)
+        risk = p.get("risk_score", 0)
+        
+        if sender not in agent_data:
+            agent_data[sender] = {"x": [], "y": []}
             
-            # Update the reactive state to trigger a UI re-render
-            model_state.set(model_state.value)
-            
-            # Check for auto-stop condition as defined in README
-            if hasattr(model_state.value, 'running') and not model_state.value.running:
-                is_running.set(False)
-                break
+        agent_data[sender]["x"].append(it)
+        agent_data[sender]["y"].append(risk)
+        
+    fig, ax = plt.subplots(figsize=(8, 4))
+    for sender, data in agent_data.items():
+        # Sort by iteration just in case
+        sorted_points = sorted(zip(data["x"], data["y"]))
+        xs = [pt[0] for pt in sorted_points]
+        ys = [pt[1] for pt in sorted_points]
+        ax.plot(xs, ys, marker="o", label=sender, linestyle="-")
+        
+    ax.set_title("Agent Risk Scores over Iterations")
+    ax.set_xlabel("Iteration")
+    ax.set_ylabel("Risk Score (0-10)")
+    ax.set_ylim(0, 10.5)
+    
+    # Ensure x-axis ticks are integers
+    if all_proposals:
+        max_iter = max(p.get("iteration", 0) for p in all_proposals)
+        ax.set_xticks(range(max_iter + 1))
+        
+    ax.grid(True, linestyle="--", alpha=0.7)
+    ax.legend()
+    
+    solara.FigureMatplotlib(fig)
+
+@solara.component
+def AgentReasoningCard(proposal):
+    # This component displays the reasoning for a single agent
+    sender = proposal.get("sender", "Unknown Agent")
+    content = proposal.get("content", {})
+    risk = proposal.get("risk_score", 0)
+    
+    # Pick a color based on the risk score
+    if risk > 7:
+        color = "#dc3545"
+    elif risk > 3:
+        color = "#ffc107"
+    else:
+        color = "#28a745"
+    
+    with solara.Card(title=f"{sender}", subtitle="Current Round Analysis"):
+        with solara.Column(style="min-height: 200px;"):
+            solara.Markdown(f"**Risk Level:** {risk}/10", style=f"color: {color}; font-weight: bold")
+            solara.Markdown(f"**Observation:** {content.get('hypothesis', 'Analyzing...')}")
+            solara.Markdown(f"**Action:** {content.get('action', 'Waiting...')}")
+
+@solara.component 
+def MASDashboard(model):
+    # We store the data we want to display in a reactive variable
+    display_state = solara.use_reactive({})
+    
+    def watch_history():
+        last_processed_idx = -1
+        while True:
+            try:
+                # Get the history list directly from your model
+                history_list = getattr(model, "mas_history", [])
+                current_idx = len(history_list) - 1
                 
-            time.sleep(0.1)
+                # Update the display state if there is a new entry
+                if current_idx > last_processed_idx:
+                    new_state = history_list[current_idx].get("state", {})
+                    if display_state.value != new_state:
+                        display_state.set(new_state)
+                    last_processed_idx = current_idx
+            except Exception:
+                pass
+            
+            # Wait a second before checking again
+            time.sleep(1.0)
 
-    # Manage the lifecycle of the simulation loop thread
-    solara.use_thread(simulation_loop, dependencies=[is_running.value])
+    # Run the watcher in the background
+    solara.use_thread(watch_history, dependencies=[])
 
-    # Render the final layout
-    with solara.Column(style={"padding": "20px", "background-color": "#f0f2f5", "min-height": "100vh"}):
-        ui_instance.build_layout(is_running)
+    # Extract the data from our stable display state
+    current_state = display_state.value
+    all_proposals = current_state.get("proposals", [])
+    verdict = current_state.get("verdict", {})
+
+    # Step 1: Find the highest iteration number
+    current_iter = 0
+    if all_proposals:
+        current_iter = max(p.get("iteration", 0) for p in all_proposals)
+
+    # Step 2: Filter to keep ONLY the proposals from the current round
+    active_proposals = [p for p in all_proposals if p.get("iteration") == current_iter]
+
+    with solara.Column(style="padding: 20px; gap: 20px;"):
+        with solara.lab.Tabs():
+            with solara.lab.Tab("Live Dashboard"):
+                with solara.Card("System Execution Flow"):
+                    Graph(state=current_state)
+                
+                if verdict:
+                    with solara.Card("Orchestrator Verdict", style="background-color: #f0f7ff;"):
+                        solara.Markdown(f"### Result: {verdict.get('verdict', 'Normal')}")
+                        solara.Markdown(f"**Action Plan:** {verdict.get('action_plan', 'Continuing monitoring.')}")
+
+                # Step 3: Show the agents side by side using Columns for the current round
+                with solara.Card(f"Current Round Reasoning (Iteration {current_iter})", style="background-color: #f9f9f9;"):
+                    with solara.Columns([1, 1]):
+                        # Sort alphabetically so the agents stay in the same position
+                        for prop in sorted(active_proposals, key=lambda x: x['sender']):
+                            AgentReasoningCard(prop)
+                            
+            with solara.lab.Tab("History & Analytics"):
+                with solara.Columns([1, 1]):
+                    # Left column: The interactions text log
+                    with solara.Card("Prior Agent Interactions"):
+                        with solara.Column(style="max-height: 600px; overflow-y: auto;"):
+                            if len(all_proposals) > len(active_proposals):
+                                prior_proposals = [p for p in all_proposals if p.get("iteration") != current_iter]
+                                iterations = sorted(list(set(p.get("iteration", 0) for p in prior_proposals)), reverse=True)
+                                
+                                for it in iterations:
+                                    solara.Markdown(f"### Iteration {it}")
+                                    props_for_it = [p for p in prior_proposals if p.get("iteration") == it]
+                                    
+                                    for prop in sorted(props_for_it, key=lambda x: x.get('sender', '')):
+                                        sender = prop.get("sender", "Unknown")
+                                        content = prop.get("content", {})
+                                        risk = prop.get("risk_score", 0)
+                                        
+                                        with solara.Row(style="margin-bottom: 10px; border-bottom: 1px solid #eee; padding-bottom: 10px;"):
+                                            solara.Markdown(f"**{sender} (Risk: {risk}/10):** {content.get('hypothesis', '')}")
+                            else:
+                                solara.Markdown("No prior interactions to display yet.")
+                                
+                    # Right column: The graph
+                    with solara.Card("Risk Score Analysis"):
+                        RiskHistoryChart(all_proposals)

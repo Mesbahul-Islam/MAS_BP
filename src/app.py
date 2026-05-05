@@ -159,13 +159,20 @@ renderer.post_process = post_process_space
 # Trigger an initial artist build so agent markers remain visible after first tick.
 renderer.draw_agents()
 
-page = SolaraViz(
-    model,
-    renderer,
-    components=[CommandConsole],
-    model_params=model_params,
-    name="Freight Simulation Map",
-    play_interval=300,
-)
+from ui.dashboard import MASDashboard
 
-page
+@solara.component
+def Page():
+    with solara.lab.Tabs():
+        with solara.lab.Tab("Simulation Map"):
+            SolaraViz(
+                model,
+                renderer,
+                components=[CommandConsole],
+                model_params=model_params,
+                name="Freight Simulation Map",
+                play_interval=300,
+            )
+        with solara.lab.Tab("MAS Decision Dashboard"):
+            MASDashboard(model)
+

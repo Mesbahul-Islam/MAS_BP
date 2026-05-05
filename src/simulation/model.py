@@ -114,6 +114,8 @@ class FreightSimulationModel(Model):
         for agent in self.agents:
            if isinstance(agent, TruckAgent):
             self.space.place_agent(agent, agent.fields.position)
+
+        self.mas_history = []  # Store historical data for visualization or analysis
     
     def step(self):
         if not self.running:

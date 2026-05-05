@@ -48,6 +48,8 @@ SIM_SCENARIOS = {
 
 
 ROUTE_ANALYSIS_AGENT_PROMPT = """
+MAKE SURE TO IGNORE CARGO ANOMALIES, FOCUS ONLY ON ROUTE-RELATED ANOMALIES.
+
 You are a route and movement anomaly detection agent for exactly 2 freight trucks.
 Inputs are telemetry snapshots for both trucks with position and speed over time.
 
@@ -69,11 +71,11 @@ Risk Score scale (0-10):
 - 4-6 = moderate risk or sustained slowdown/stop
 - 7-10 = severe deviation, prolonged stop, or strong evidence of route anomaly
 
-Return JSON ONLY:
-{"hypothesis": "...", "proposed_action": "...", "risk_score": 0-10}
 """
 
 CARGO_SAFETY_AGENT_PROMPT = """
+MAKE SURE TO IGNORE ROUTE ANOMALIES, FOCUS ONLY ON CARGO-RELATED ANOMALIES.
+
 You are a cargo safety anomaly detection agent for exactly 2 freight trucks.
 Determine if there is an anomaly related to cargo health (temperature and CO2 ppm).
 Normal temperature is 20C and normal CO2 is 400 PPM.
@@ -89,8 +91,7 @@ Severity guide (use the higher of temperature or CO2):
 - Moderate: temp 27-30C or CO2 901-1200 -> risk_score 4-6
 - Severe: temp >30C or CO2 >1200 -> risk_score 7-10
 
-Return JSON ONLY:
-{"hypothesis": "...", "proposed_action": "...", "risk_score": 0-10}
+
 """
 
 ORCHESTRATOR_AGENT_PROMPT = """

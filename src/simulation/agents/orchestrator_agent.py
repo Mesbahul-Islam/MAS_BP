@@ -1,6 +1,9 @@
 import threading
 import queue
+import copy
 from collections import deque
+
+import solara
 
 from mesa import Agent
 
@@ -101,13 +104,26 @@ class OrchestratorAgent(Agent):
                 if task is None:
                     break
                 
-                # Use the abstracted DecisionEngine here
-                result_state = self.decision_engine.process_telemetry(
+                # Use the abstracted DecisionEngine here to stream intermediate states
+                state_stream = self.decision_engine.process_telemetry(
                     context=task["context"], 
                     tick=task["tick"]
                 )
                 
-                verdict = result_state.get("verdict")
+                final_state = None
+                for current_state in state_stream:
+                    # Save each interaction step for the UI dashboard
+                    if not hasattr(self.model, "mas_history"):
+                        self.model.mas_history = []
+                    
+                    # Deepcopy the state to ensure the UI captures the exact snapshot 
+                    # before LangGraph mutates it in the next node
+                    state_snapshot = copy.deepcopy(current_state)
+                    
+                    self.model.mas_history.append({"tick": task["tick"], "state": state_snapshot})
+                    final_state = state_snapshot
+                
+                verdict = final_state.get("verdict") if final_state else None
                 if verdict:
                     if self.output_channel:
                         self.output_channel.publish(

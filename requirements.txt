@@ -3,5 +3,7 @@ pyzmq
 langchain
 python-dotenv
 langchain-ollama
+langchain-google-genai
 langgraph
 pydantic
+pytest
