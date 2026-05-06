@@ -1,27 +1,36 @@
 # MAS_BP
 
-Multi-agent freight simulation built with Mesa, with live map visualization in Solara and ZeroMQ-based event streaming.
+MAS_BP is a multi-agent freight monitoring simulation built with Mesa, LangGraph, ZeroMQ, and Solara.
+It simulates truck telemetry, publishes live monitoring data, and uses a LangGraph decision engine to produce
+route and cargo safety analysis plus an orchestrator verdict.
 
-## Current Features
+## What You Can Do
 
-- Truck movement across route nodes on a continuous space map.
-- Monitoring agent that aggregates truck snapshots and publishes monitoring events.
-- Shared ZeroMQ endpoint with separate topics for truck telemetry and monitoring snapshots.
-- Monitoring output persistence to file, with automatic file reset for new runs.
-- Scenario-based route and anomaly behavior selection from config.
-- Simulation auto-stop when all trucks reach their final node.
+- Run a headless freight simulation.
+- Launch a Solara web app with a live simulation map and a decision dashboard.
+- Switch between the map and dashboard without crashing the UI.
+- Inspect the latest orchestrator verdict and agent reasoning for the most recent simulation tick.
+- Persist dashboard history to a local JSON file for the active session.
 
-## Project Setup
+## Main Features
 
-### Prerequisites
+- Continuous truck movement on a route network with scenario-based behavior.
+- Telemetry streaming over ZeroMQ.
+- Monitoring snapshots and analysis history published on separate topics.
+- A Solara dashboard that shows only the latest tick, grouped by iteration.
+- A Google Generative AI based decision engine for route, cargo, and orchestrator reasoning.
+- Automatic clearing of dashboard history when the app starts.
 
-- Python 3.10+.
-- A working virtual environment tool such as `venv`.
-- For the LLM-backed integration tests and decision engine, a local Ollama installation with the `qwen3.5:0.8b` model available.
+## Requirements
 
-### Create and activate the environment
+- Python 3.10 or newer.
+- A virtual environment tool such as `venv`.
+- A valid Google API key for the LangChain Google Generative AI backend.
+- Network access to Google Generative AI if you are running the live decision engine.
 
-From repository root:
+## Setup
+
+From the repository root:
 
 ```bash
 python -m venv .venv
@@ -30,7 +39,7 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Windows PowerShell:
+### Windows PowerShell
 
 ```powershell
 python -m venv .venv
@@ -39,7 +48,7 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Windows CMD:
+### Windows CMD
 
 ```bat
 python -m venv .venv
@@ -48,71 +57,94 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### Optional Ollama setup
+## Environment Variables
 
-If you want to run the real LLM integration path, start Ollama locally and make sure the required model is available:
+The app reads a `.env` file from the project root.
 
-```bash
-ollama pull qwen3.5:0.8b
-ollama serve
+Create a file named `.env` in the repository root and add:
+
+```env
+GOOGLE_API_KEY=your_google_api_key_here
+GOOGLE_MODEL=gemini-2.0-flash
 ```
 
-The test harness and decision engine use the local Ollama endpoint through `langchain-ollama`.
+Optional runtime variables used by the test suite and local runs:
 
-## Running the project
+- `RUN_INTEGRATION_TESTS=1` enables tests that talk to the real model backend.
+- `ENFORCE_TIMING=1` makes the timing test fail if the response is too slow.
+- `PYTHONPATH=src` is useful when running Python modules directly from the repository root.
 
-Run headless simulation:
+If `GOOGLE_MODEL` is omitted, the default is `gemini-2.0-flash`.
+If `GOOGLE_API_KEY` is missing, the decision engine will raise an error at startup.
 
-```bash
-python src/run_simulation.py
-```
+## Running the Project
 
-Run Solara app:
+### Run the Solara app
 
 ```bash
 solara run src/app.py
 ```
 
-Then open the URL printed by Solara (usually http://localhost:8765).
+Open the URL printed by Solara, usually:
 
-## Runtime behavior
+```text
+http://localhost:8765
+```
 
-- Tick duration is configured via SIM_TICK_SECONDS in [src/config.py](src/config.py).
-- Telemetry publish interval is controlled by TELEMETRY_PUBLISH_EVERY_TICKS in [src/config.py](src/config.py).
-- Monitoring snapshots are also published on the same tick interval.
-- Simulation stops automatically when all trucks reach their destination nodes.
+The app contains two tabs:
 
-## Topics and logging
+- Simulation Map: the live Mesa/Solara visualization.
+- MAS Decision Dashboard: the latest agent negotiation result for the most recent tick.
 
-- Endpoint: TELEMETRY_ENDPOINT in [src/config.py](src/config.py)
-- Truck topic: TELEMETRY_TOPIC
-- Monitoring topic: MONITORING_TOPIC
+### Run the headless simulation
 
-Only monitoring-topic messages are currently persisted by the subscriber flow.
+```bash
+python src/run_simulation.py
+```
 
-Output file:
+## How the Dashboard Works
 
-- [outputs/monitoring_logs/output.json](outputs/monitoring_logs/output.json)
+- The dashboard listens to the `analysis.history` ZeroMQ topic.
+- It keeps only the latest tick in view.
+- Proposals are grouped by iteration and sorted by agent name.
+- The orchestrator verdict is shown as a highlighted card on the right.
+- The dashboard history file is stored at `outputs/dashboard_history.json`.
+- The dashboard history is cleared when the app starts, so each run begins with a fresh view.
 
-Log reset behavior:
+## Data Flow
 
-- File is cleared when subscriber starts.
-- File is cleared again if incoming tick value goes backward, which indicates a new simulation run.
+- Truck telemetry is published on `telemetry.truck`.
+- Monitoring snapshots are published on `monitoring.snapshot`.
+- Agent history is published on `analysis.history`.
+- The Solara app starts a background monitoring subscriber for live map support.
+- The dashboard subscribes to history updates and renders the most recent tick only.
 
-## Scenario selection
+## Scenarios
 
-Set active scenario in [src/config.py](src/config.py):
+Choose the active scenario in [`src/config.py`](src/config.py).
 
-- normal
-- deviation
-- anomaly_stop_open_at_d
+Available scenarios:
 
-Current anomaly behavior for anomaly_stop_open_at_d:
+- `normal`
+- `deviation`
+- `anomaly_stop_open_at_d`
+- `cargo_state`
 
-- The designated bad truck is truck 0 (first created truck).
-- At node D, it stops and opens door for 30 ticks.
-- Door then closes.
-- Truck resumes movement afterward.
+### Scenario Notes
+
+- `normal`: both trucks follow the expected route.
+- `deviation`: one truck takes a longer route path.
+- `anomaly_stop_open_at_d`: one truck stops at node D and opens its door briefly.
+- `cargo_state`: the cargo telemetry changes over time.
+
+## Output Files
+
+Important generated files:
+
+- [`outputs/dashboard_history.json`](outputs/dashboard_history.json): latest dashboard history persisted between tab switches and app refreshes.
+- [`outputs/monitoring_logs/output.json`](outputs/monitoring_logs/output.json): monitoring subscriber output.
+- [`outputs/llm_scenario_metrics_report.md`](outputs/llm_scenario_metrics_report.md): evaluation metrics report.
+- [`outputs/llm_scenario_timing_report.md`](outputs/llm_scenario_timing_report.md): timing report.
 
 ## Testing
 
@@ -122,35 +154,57 @@ Run the default test suite:
 PYTHONPATH=src python -m pytest -q
 ```
 
-Run the integration tests that use the real Ollama-backed evaluation harness:
+Run the real-model integration tests:
 
 ```bash
 RUN_INTEGRATION_TESTS=1 PYTHONPATH=src python -m pytest src/tests/test_evaluation_metrics.py -q -s
 ```
 
-To enforce the timing thresholds during the timing evaluation, add:
+Run the timing check with enforcement enabled:
 
 ```bash
 ENFORCE_TIMING=1 RUN_INTEGRATION_TESTS=1 PYTHONPATH=src python -m pytest src/tests/test_evaluation_metrics.py::test_llm_detection_and_response_time -q -s
 ```
 
-The timing test writes its report to [outputs/llm_scenario_timing_report.md](outputs/llm_scenario_timing_report.md), and the detection test writes its report to [outputs/llm_scenario_metrics_report.md](outputs/llm_scenario_metrics_report.md).
-
-## Environment variables
-
-- `OLLAMA_BASE_URL`: URL to your local or remote Ollama instance (default: `http://localhost:11434`).
-- `OLLAMA_MODEL`: the Ollama model to use for decision engine (default: `qwen3.5:0.8b`).
-- `RUN_INTEGRATION_TESTS`: enables the real Ollama/LangGraph integration path during pytest runs.
-- `ENFORCE_TIMING`: when set to `1`, fails the timing test if the simulated-tick thresholds are exceeded.
-- `PYTHONPATH`: set to `src` so the project package can be imported directly during local runs.
-
 ## Key Files
 
-- [src/config.py](src/config.py): runtime settings, topics, scenarios.
-- [src/run_simulation.py](src/run_simulation.py): headless runner.
-- [src/app.py](src/app.py): Solara map app.
-- [src/telemetry_subscriber.py](src/telemetry_subscriber.py): monitoring-topic subscriber entrypoint.
-- [src/simulation/model.py](src/simulation/model.py): model orchestration and stop condition.
-- [src/simulation/agents/truck_agent.py](src/simulation/agents/truck_agent.py): truck movement and anomaly logic.
-- [src/simulation/agents/monitoring_agent.py](src/simulation/agents/monitoring_agent.py): aggregate monitoring snapshots.
-- [src/simulation/communication.py](src/simulation/communication.py): ZeroMQ channel and subscriber logging.
+- [`src/config.py`](src/config.py): runtime settings, scenario definitions, topics, and environment loading.
+- [`src/app.py`](src/app.py): Solara entry point with tabbed UI.
+- [`src/run_simulation.py`](src/run_simulation.py): headless simulation entry point.
+- [`src/telemetry_subscriber.py`](src/telemetry_subscriber.py): monitoring log subscriber entry point.
+- [`src/simulation/model.py`](src/simulation/model.py): Mesa model orchestration and stop condition.
+- [`src/simulation/communication.py`](src/simulation/communication.py): ZeroMQ channels and subscriber helpers.
+- [`src/simulation/agents/decision_engine.py`](src/simulation/agents/decision_engine.py): Google GenAI LangGraph decision engine.
+- [`src/ui/dashboard.py`](src/ui/dashboard.py): dashboard rendering and history handling.
+
+## Troubleshooting
+
+### The app says `GOOGLE_API_KEY is not set`
+
+Add the key to your `.env` file or export it in your shell before starting the app.
+
+### The dashboard shows no data
+
+Make sure the simulation is running and that the history topic is being published.
+The dashboard only displays the latest tick that has been received.
+
+### The map or dashboard freezes when switching tabs
+
+The current implementation renders only the active tab to avoid cross-tab re-render conflicts.
+If you still see issues, restart the app and start from a clean browser session.
+
+### I changed `.env` but nothing happened
+
+Restart the Solara app after editing environment variables. The values are loaded when the process starts.
+
+## Project Summary
+
+This project combines:
+
+- Mesa for agent-based simulation.
+- ZeroMQ for telemetry and history streaming.
+- Solara for the web UI.
+- LangGraph for multi-agent reasoning and negotiation.
+- LangChain Google Generative AI for the live decision engine.
+
+If you want to extend the system, start with `src/config.py` for runtime settings and `src/simulation/agents/decision_engine.py` for agent behavior.
