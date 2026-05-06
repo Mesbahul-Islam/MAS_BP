@@ -121,3 +121,4 @@ ONLY if all conflicts are resolved and you are ready to issue the final fleet co
 ROUTE_ANALYSIS_TOPIC = "analysis.route"
 CARGO_SAFETY_TOPIC = "analysis.cargo"
 ORCHESTRATOR_TOPIC = "analysis.orchestrator"
+MAS_HISTORY_TOPIC = "analysis.history"

@@ -9,6 +9,7 @@ from config import (
     ROUTE_ANALYSIS_TOPIC,
     CARGO_SAFETY_TOPIC,
     ORCHESTRATOR_TOPIC,
+    MAS_HISTORY_TOPIC,
 )
 from mesa import Model
 from mesa.space import ContinuousSpace
@@ -89,6 +90,11 @@ class FreightSimulationModel(Model):
             topic=ORCHESTRATOR_TOPIC,
             schema=None,
         )
+        self.mas_history_channel = ZeroMQTelemetryChannel(
+            endpoint=TELEMETRY_ENDPOINT,
+            topic=MAS_HISTORY_TOPIC,
+            schema=None,
+        )
 
         # Create trucks, passing the per-agent `route` sequence so each agent gets its own route.
         TruckAgent.create_agents(
@@ -108,7 +114,7 @@ class FreightSimulationModel(Model):
             monitoring_channel=self.monitoring_channel,
         )
         
-        OrchestratorAgent(self, output_channel=self.orchestrator_channel)
+        OrchestratorAgent(self, output_channel=self.orchestrator_channel, history_channel=self.mas_history_channel)
 
         # Place all agents in the renderer-backed space.
         for agent in self.agents:
@@ -145,3 +151,5 @@ class FreightSimulationModel(Model):
         self.route_analysis_channel.close()
         self.cargo_safety_channel.close()
         self.orchestrator_channel.close()
+        self.mas_history_channel.close()
+

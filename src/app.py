@@ -84,56 +84,66 @@ def truck_portrayal(agent):
 
 
 def post_process_space(ax):
-    # Solara manages figure layout; avoid figure-level resizing/layout mutations here.
+    # Guard against matplotlib figures being destroyed or detached when switching tabs.
+    # The figure object may still exist but have a dead canvas (dpi=None).
+    if ax is None or ax.figure is None:
+        return
+    try:
+        _ = ax.figure.dpi
+    except AttributeError:
+        return
 
-    # Keep geometry readable while still filling panel space.
-    ax.set_aspect("auto")
-    ax.set_title("Freight Truck Map")
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.figure.set_size_inches(14, 7)
+    try:
+        ax.set_aspect("auto")
+        ax.set_title("Freight Truck Map")
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.figure.set_size_inches(14, 7)
 
-    x_values = [coords[0] for coords in NODE_COORDINATES.values()]
-    y_values = [coords[1] for coords in NODE_COORDINATES.values()]
-    x_min, x_max = min(x_values), max(x_values)
-    y_min, y_max = min(y_values), max(y_values)
-    x_margin = (x_max - x_min) * 0.05 if x_max != x_min else 10.0
-    y_margin = (y_max - y_min) * 0.05 if y_max != y_min else 10.0
-    ax.set_xlim(x_min - x_margin, x_max + x_margin)
-    ax.set_ylim(y_min - y_margin, y_max + y_margin)
-    ax.margins(x=0, y=0)
+        x_values = [coords[0] for coords in NODE_COORDINATES.values()]
+        y_values = [coords[1] for coords in NODE_COORDINATES.values()]
+        x_min, x_max = min(x_values), max(x_values)
+        y_min, y_max = min(y_values), max(y_values)
+        x_margin = (x_max - x_min) * 0.05 if x_max != x_min else 10.0
+        y_margin = (y_max - y_min) * 0.05 if y_max != y_min else 10.0
+        ax.set_xlim(x_min - x_margin, x_max + x_margin)
+        ax.set_ylim(y_min - y_margin, y_max + y_margin)
+        ax.margins(x=0, y=0)
 
-    # Remove previously drawn static artists so redraws do not accumulate stale objects.
-    static_gids = {"static_route", "static_node", "static_node_label"}
-    for line in list(ax.lines):
-        if line.get_gid() in static_gids:
-            line.remove()
-    for patch in list(ax.patches):
-        if patch.get_gid() in static_gids:
-            patch.remove()
-    for text in list(ax.texts):
-        if text.get_gid() in static_gids:
-            text.remove()
+        # Remove previously drawn static artists so redraws do not accumulate stale objects.
+        static_gids = {"static_route", "static_node", "static_node_label"}
+        for line in list(ax.lines):
+            if line.get_gid() in static_gids:
+                line.remove()
+        for patch in list(ax.patches):
+            if patch.get_gid() in static_gids:
+                patch.remove()
+        for text in list(ax.texts):
+            if text.get_gid() in static_gids:
+                text.remove()
 
-    # Draw all route segments in the background.
-    for route in ROUTES:
-        route_points = [NODE_COORDINATES[node] for node in route]
-        xs = [point[0] for point in route_points]
-        ys = [point[1] for point in route_points]
-        (line,) = ax.plot(xs, ys, color="lightgray", linestyle="--", linewidth=1.2, zorder=1)
-        line.set_gid("static_route")
+        # Draw all route segments in the background.
+        for route in ROUTES:
+            route_points = [NODE_COORDINATES[node] for node in route]
+            xs = [point[0] for point in route_points]
+            ys = [point[1] for point in route_points]
+            (line,) = ax.plot(xs, ys, color="lightgray", linestyle="--", linewidth=1.2, zorder=1)
+            line.set_gid("static_route")
 
-    # Draw node markers and labels.
-    for node, (x, y) in NODE_COORDINATES.items():
-        node_label = ax.annotate(
-            node,
-            xy=(x, y),
-            xytext=(6, 6),
-            textcoords="offset points",
-            fontsize=8,
-            color="black",
-        )
-        node_label.set_gid("static_node_label")
+        # Draw node markers and labels.
+        for node, (x, y) in NODE_COORDINATES.items():
+            node_label = ax.annotate(
+                node,
+                xy=(x, y),
+                xytext=(6, 6),
+                textcoords="offset points",
+                fontsize=8,
+                color="black",
+            )
+            node_label.set_gid("static_node_label")
+    except Exception as e:
+        # Silently handle rendering errors when figure is being destroyed
+        print(f"[Renderer] Warning: Could not update map visualization: {e}")
 
 
 model_params = {
@@ -157,22 +167,32 @@ renderer = SpaceRenderer(
 ).setup_agents(truck_portrayal)
 renderer.post_process = post_process_space
 # Trigger an initial artist build so agent markers remain visible after first tick.
-renderer.draw_agents()
+try:
+    renderer.draw_agents()
+except Exception as e:
+    print(f"[Renderer] Warning: Initial draw_agents failed: {e}")
 
 from ui.dashboard import MASDashboard
 
 @solara.component
 def Page():
-    with solara.lab.Tabs():
+    # Track which tab is active - this prevents rendering inactive tabs
+    active_tab = solara.use_reactive(0)
+    
+    with solara.lab.Tabs(value=active_tab.value, on_value=lambda v: active_tab.set(v)):
         with solara.lab.Tab("Simulation Map"):
-            SolaraViz(
-                model,
-                renderer,
-                components=[CommandConsole],
-                model_params=model_params,
-                name="Freight Simulation Map",
-                play_interval=300,
-            )
+            # Only render SolaraViz when this tab is active
+            if active_tab.value == 0:
+                SolaraViz(
+                    model,
+                    renderer,
+                    components=[CommandConsole],
+                    model_params=model_params,
+                    name="Freight Simulation Map",
+                    play_interval=300,
+                )
         with solara.lab.Tab("MAS Decision Dashboard"):
-            MASDashboard(model)
-
+            # Only render dashboard when this tab is active
+            if active_tab.value == 1:
+                # Dashboard loads its own history from file
+                MASDashboard(model)

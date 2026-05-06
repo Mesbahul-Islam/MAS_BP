@@ -22,10 +22,11 @@ from simulation.agents.decision_engine import DecisionEngine
 class OrchestratorAgent(Agent):
     """Integrates the LangGraph execution into the continuous Mesa simulation tick loop."""
     
-    def __init__(self, model, output_channel):
+    def __init__(self, model, output_channel, history_channel=None):
         super().__init__(model)
         self.agent_name = f"orchestrator_{self.unique_id}"
         self.output_channel = output_channel
+        self.history_channel = history_channel
         
         # Initialize the LangGraph engine
         self.decision_engine = DecisionEngine()
@@ -116,11 +117,28 @@ class OrchestratorAgent(Agent):
                     if not hasattr(self.model, "mas_history"):
                         self.model.mas_history = []
                     
-                    # Deepcopy the state to ensure the UI captures the exact snapshot 
-                    # before LangGraph mutates it in the next node
-                    state_snapshot = copy.deepcopy(current_state)
+                    # Avoid expensive deepcopy - only copy the mutable parts that matter for the UI
+                    # This prevents blocking the worker thread during LLM inference
+                    state_snapshot = {
+                        "proposals": copy.copy(current_state.get("proposals", [])),
+                        "verdict": copy.copy(current_state.get("verdict")),
+                        "iteration": current_state.get("iteration", 0),
+                        "feedback": current_state.get("feedback", ""),
+                        "tick": task["tick"]
+                    }
                     
-                    self.model.mas_history.append({"tick": task["tick"], "state": state_snapshot})
+                    history_payload = {"tick": task["tick"], "state": state_snapshot}
+                    if not hasattr(self.model, "mas_history"):
+                        self.model.mas_history = []
+                    self.model.mas_history.append(history_payload)
+                    
+                    if self.history_channel:
+                        self.history_channel.publish(
+                            tick=task["tick"],
+                            source_agent=self.agent_name,
+                            payload=history_payload
+                        )
+                        
                     final_state = state_snapshot
                 
                 verdict = final_state.get("verdict") if final_state else None

@@ -118,7 +118,7 @@ class DecisionEngine:
         
         try:
             response = agent.invoke({"messages": [HumanMessage(content=self._format_prompt(state, sender_name))]})
-            # Retrieve the stringly-typed Pydantic model object populated by the LLM
+            
             structured_data = response.get("structured_response")
             
             print(f"[{sender_name}] Response:\n{structured_data}")

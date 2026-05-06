@@ -31,9 +31,8 @@ class ScenarioResult:
 @dataclass
 class ScenarioTimingResult:
     scenario: str
-    avg_detection_time_ms: float
-    avg_response_time_ms: float
-    avg_llm_call_time_ms: float
+    end_to_end_time_ms: float
+    per_call_time_ms: float
     runs: int
 
 
@@ -300,26 +299,23 @@ def _collect_timing_results(scenarios: Dict[str, List[dict]], runs_per_scenario:
     timing_results: List[ScenarioTimingResult] = []
 
     for scenario, context in scenarios.items():
-        detection_times_ms: List[float] = []
-        response_times_ms: List[float] = []
-        llm_call_times_ms: List[float] = []
+        e2e_times_ms: List[float] = []
+        per_call_times_ms: List[float] = []
 
         for _ in range(runs_per_scenario):
             call_timings: List[float] = []
-            _, detection_elapsed = _run_engine_timed(context, call_timings=call_timings)
-            detection_times_ms.append(detection_elapsed * 1000.0)
-            response_times_ms.append(sum(call_timings) * 1000.0)
+            _, total_elapsed = _run_engine_timed(context, call_timings=call_timings)
+            e2e_times_ms.append(total_elapsed * 1000.0)
             if call_timings:
-                llm_call_times_ms.append(mean(call_timings) * 1000.0)
+                per_call_times_ms.append(mean(call_timings) * 1000.0)
             else:
-                llm_call_times_ms.append(0.0)
+                per_call_times_ms.append(0.0)
 
         timing_results.append(
             ScenarioTimingResult(
                 scenario=scenario,
-                avg_detection_time_ms=mean(detection_times_ms),
-                avg_response_time_ms=mean(response_times_ms),
-                avg_llm_call_time_ms=mean(llm_call_times_ms),
+                end_to_end_time_ms=mean(e2e_times_ms),
+                per_call_time_ms=mean(per_call_times_ms),
                 runs=runs_per_scenario,
             )
         )
@@ -361,8 +357,8 @@ def _write_timing_report(results: List[ScenarioTimingResult], report_path: str) 
     lines = [
         "# LLM Timing Evaluation Report",
         "",
-        "| Scenario | Avg Detection Time (ms) | Avg Response Time (ms) | Avg LLM Call Time (ms) | Runs | Pass Detection | Pass Response |",
-        "|---|---:|---:|---:|---:|---:|---:|",
+        "| Scenario | Total End-to-End Time (ms) | Per-Call Response Time (ms) | Runs | Pass E2E |",
+        "|---|---:|---:|---:|---:|",
     ]
 
     for item in results:
@@ -374,14 +370,12 @@ def _write_timing_report(results: List[ScenarioTimingResult], report_path: str) 
         except Exception:
             sim_tick = 0.5
 
-        DETECTION_TICKS_MAX = 20
-        REASONING_RESPONSE_TICKS_MAX = 30
+        E2E_TICKS_MAX = 20
 
-        pass_detection = (item.avg_detection_time_ms / 1000.0) <= (DETECTION_TICKS_MAX * sim_tick)
-        pass_response = (item.avg_response_time_ms / 1000.0) <= (REASONING_RESPONSE_TICKS_MAX * sim_tick)
+        pass_e2e = (item.end_to_end_time_ms / 1000.0) <= (E2E_TICKS_MAX * sim_tick)
 
         lines.append(
-            f"| {item.scenario} | {item.avg_detection_time_ms:.2f} | {item.avg_response_time_ms:.2f} | {item.avg_llm_call_time_ms:.2f} | {item.runs} | {'PASS' if pass_detection else 'FAIL'} | {'PASS' if pass_response else 'FAIL'} |"
+            f"| {item.scenario} | {item.end_to_end_time_ms:.2f} | {item.per_call_time_ms:.2f} | {item.runs} | {'PASS' if pass_e2e else 'FAIL'} |"
         )
 
     with open(report_path, "w") as f:
@@ -413,34 +407,25 @@ def test_llm_detection_and_response_time():
         SIM_TICK_SECONDS = getattr(cfg, "SIM_TICK_SECONDS", 0.5)
     except Exception:
         SIM_TICK_SECONDS = 0.5
-        scenarios = _synthetic_scenarios()
-        timing_results = _collect_timing_results(scenarios, runs_per_scenario=2)
 
-        report_path = "outputs/llm_scenario_timing_report.md"
-        _write_timing_report(timing_results, report_path)
+    scenarios = _synthetic_scenarios()
+    timing_results = _collect_timing_results(scenarios, runs_per_scenario=2)
 
-        # By default write pass/fail into report. If caller explicitly sets ENFORCE_TIMING=1,
-        # enforce assertions to fail the test when thresholds are exceeded.
-        enforce = os.environ.get("ENFORCE_TIMING", "0") == "1"
-        if enforce:
-            try:
-                import importlib
-                cfg = importlib.import_module("config")
-                SIM_TICK_SECONDS = getattr(cfg, "SIM_TICK_SECONDS", 0.5)
-            except Exception:
-                SIM_TICK_SECONDS = 0.5
+    report_path = "outputs/llm_scenario_timing_report.md"
+    _write_timing_report(timing_results, report_path)
 
-            DETECTION_TICKS_MAX = 20
-            REASONING_RESPONSE_TICKS_MAX = 30
+    # By default write pass/fail into report. If caller explicitly sets ENFORCE_TIMING=1,
+    # enforce assertions to fail the test when thresholds are exceeded.
+    enforce = os.environ.get("ENFORCE_TIMING", "0") == "1"
+    if enforce:
+        DETECTION_TICKS_MAX = 20
+        REASONING_RESPONSE_TICKS_MAX = 30
+        E2E_TICKS_MAX = 20
+        e2e_seconds_max = E2E_TICKS_MAX * SIM_TICK_SECONDS
 
-            detection_seconds_max = DETECTION_TICKS_MAX * SIM_TICK_SECONDS
-            reasoning_response_seconds_max = REASONING_RESPONSE_TICKS_MAX * SIM_TICK_SECONDS
+        for item in timing_results:
+            e2e_s = item.end_to_end_time_ms / 1000.0
+            assert e2e_s <= e2e_seconds_max, f"End-to-End latency too high for {item.scenario}: {e2e_s}s > {e2e_seconds_max}s"
 
-            for item in timing_results:
-                avg_detection_s = item.avg_detection_time_ms / 1000.0
-                avg_response_s = item.avg_response_time_ms / 1000.0
-                assert avg_detection_s <= detection_seconds_max, f"Detection latency too high for {item.scenario}: {avg_detection_s}s > {detection_seconds_max}s"
-                assert avg_response_s <= reasoning_response_seconds_max, f"Reasoning+response too high for {item.scenario}: {avg_response_s}s > {reasoning_response_seconds_max}s"
-
-        assert len(timing_results) == len(scenarios)
-        assert os.path.exists(report_path)
+    assert len(timing_results) == len(scenarios)
+    assert os.path.exists(report_path)
