@@ -4,7 +4,7 @@ import operator
 from typing import TypedDict, Annotated, List, Dict, Any, Literal
 from pydantic import BaseModel, Field
 
-from langchain_ollama import ChatOllama
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.messages import HumanMessage
 from langgraph.graph import StateGraph, START, END
 from langchain.agents import create_agent
@@ -59,13 +59,16 @@ class DecisionEngine:
     def __init__(self, llm=None):
         # Initialize the base LLM model
         if llm is None:
-            from config import OLLAMA_BASE_URL, OLLAMA_MODEL
-            self.llm = ChatOllama(
-                model=OLLAMA_MODEL, 
-                temperature=0.5, 
-                streaming=True,
-                base_url=OLLAMA_BASE_URL, 
-                reasoning=False
+            from config import GOOGLE_API_KEY, GOOGLE_MODEL
+
+            if not GOOGLE_API_KEY:
+                raise ValueError("GOOGLE_API_KEY is not set. Add it to your environment or .env file.")
+
+            self.llm = ChatGoogleGenerativeAI(
+                model=GOOGLE_MODEL,
+                temperature=0.5,
+                google_api_key=GOOGLE_API_KEY,
+                convert_system_message_to_human=True,
             )
         else:
             self.llm = llm
@@ -139,7 +142,7 @@ class DecisionEngine:
             return {"proposals": [proposal]}
             
         except Exception as e: 
-            # Fallback logic to prevent Graph crashes if Ollama drops the structure
+            # Fallback logic to prevent Graph crashes if the model drops the structure
             print(f"[{sender_name}] Error processing structured output response: {e}")
             print(f"==================================================\n")
             return {"proposals": [{"sender": sender_name, "risk_score": 0, "iteration": state.get("iteration", 0), "content": {"hypothesis": "Error parsing fallback.", "action": "None"}}]}

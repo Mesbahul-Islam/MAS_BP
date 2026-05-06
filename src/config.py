@@ -1,11 +1,14 @@
+from pathlib import Path
+import os
+
 from dotenv import load_dotenv
 
-load_dotenv(dotenv_path="../.env")
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(_PROJECT_ROOT / ".env")
 
-import os
 # LLM configuration
-OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen3.5:0.8b")
+GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
+GOOGLE_MODEL = os.environ.get("GOOGLE_MODEL", "gemini-2.0-flash")
 
 # ZeroMQ telemetry channel configuration
 TELEMETRY_ENDPOINT = "tcp://127.0.0.1:5590"

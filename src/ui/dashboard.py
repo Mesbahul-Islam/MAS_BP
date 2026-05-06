@@ -289,8 +289,9 @@ def MASDashboard(model, history_state=None):
                                     existing_proposals = current_tick_data.get("proposals", [])
                                     new_proposals      = new_state.get("proposals", [])
                                     current_tick_data["proposals"] = existing_proposals + new_proposals
-                                    if "verdict" in new_state and new_state.get("verdict"):
-                                        current_tick_data["verdict"] = new_state["verdict"]
+                                    incoming_verdict = new_state.get("verdict")
+                                    if incoming_verdict:
+                                        current_tick_data["verdict"] = incoming_verdict
 
                     current_time = time.time()
                     if current_tick_data and last_tick is not None and (current_time - last_update_time) >= 0.5:
