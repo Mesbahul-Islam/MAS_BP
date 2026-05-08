@@ -1,210 +1,585 @@
-# MAS_BP
+# Freight Safe User Guide
 
-MAS_BP is a multi-agent freight monitoring simulation built with Mesa, LangGraph, ZeroMQ, and Solara.
-It simulates truck telemetry, publishes live monitoring data, and uses a LangGraph decision engine to produce
-route and cargo safety analysis plus an orchestrator verdict.
+## Introduction
 
-## What You Can Do
+Freight Safe is a smart freight monitoring and safety platform designed to help users monitor truck activity, cargo conditions, and route behavior in real time.
 
-- Run a headless freight simulation.
-- Launch a Solara web app with a live simulation map and a decision dashboard.
-- Switch between the map and dashboard without crashing the UI.
-- Inspect the latest orchestrator verdict and agent reasoning for the most recent simulation tick.
-- Persist dashboard history to a local JSON file for the active session.
+The system simulates freight transport operations and provides live monitoring through an interactive dashboard and map interface. Freight Safe also uses an intelligent decision engine that analyzes vehicle activity and identifies unusual behavior, delays, route deviations, or cargo-related concerns.
 
-## Main Features
+This guide explains:
 
-- Continuous truck movement on a route network with scenario-based behavior.
-- Telemetry streaming over ZeroMQ.
-- Monitoring snapshots and analysis history published on separate topics.
-- A Solara dashboard that shows only the latest tick, grouped by iteration.
-- A Google Generative AI based decision engine for route, cargo, and orchestrator reasoning.
-- Automatic clearing of dashboard history when the app starts.
+* What Freight Safe does
+* How the system works
+* How to install and start the system
+* What users should expect during operation
+* Common issues and solutions
 
-## Requirements
+This guide is written for non-technical users.
 
-- Python 3.10 or newer.
-- A virtual environment tool such as `venv`.
-- A valid Google API key for the LangChain Google Generative AI backend.
-- Network access to Google Generative AI if you are running the live decision engine.
+---
 
-## Setup
+# What Freight Safe Does
 
-From the repository root:
+Freight Safe monitors simulated freight transportation activity and presents live operational data through a visual dashboard.
+
+The system is designed to:
+
+* Track truck movement across routes
+* Monitor cargo and vehicle telemetry
+* Detect unusual or risky behavior
+* Provide automated safety assessments
+* Display live operational information through a web interface
+
+Freight Safe can simulate several operational situations, including:
+
+* Normal freight operations
+* Route deviations
+* Unexpected vehicle stops
+* Cargo state changes
+* Security-related anomalies
+
+The system continuously analyzes incoming telemetry and produces automated assessments from multiple monitoring agents.
+
+An orchestrator component combines these assessments into a final operational verdict.
+
+---
+
+# How Freight Safe Works
+
+## System Overview
+
+Freight Safe operates as a live monitoring environment.
+
+The system consists of four main parts:
+
+1. Truck Simulation
+2. Monitoring and Telemetry Collection
+3. Intelligent Decision Engine
+4. User Dashboard
+
+---
+
+## 1. Truck Simulation
+
+The simulation represents freight trucks moving through a transport network.
+
+Each truck continuously produces operational information such as:
+
+* Current location
+* Route progress
+* Cargo status
+* Door activity
+* Movement behavior
+
+This information is generated automatically during the simulation.
+
+---
+
+## 2. Monitoring and Telemetry Collection
+
+Freight Safe continuously collects operational data from the simulated trucks.
+
+The monitoring system processes information such as:
+
+* Vehicle movement
+* Stops and delays
+* Route deviations
+* Cargo condition changes
+* Door opening events
+
+This information is streamed live to the dashboard.
+
+---
+
+## 3. Intelligent Decision Engine
+
+The decision engine acts as a group of automated monitoring agents.
+
+Each agent analyzes the situation from a different perspective.
+
+Examples include:
+
+* Route safety analysis
+* Cargo condition analysis
+* Operational behavior analysis
+
+The system then combines these analyses into a final recommendation or verdict.
+
+Users can view:
+
+* Agent observations
+* Safety recommendations
+* Current operational assessments
+* Final orchestrator decisions
+
+---
+
+## 4. User Dashboard
+
+The Freight Safe dashboard provides a live operational view.
+
+The dashboard contains two main sections:
+
+### Simulation Map
+
+The map shows:
+
+* Live truck movement
+* Route progress
+* Vehicle positions
+* Operational activity
+
+### MAS Decision Dashboard
+
+The dashboard displays:
+
+* Latest monitoring results
+* Agent reasoning
+* Operational assessments
+* Final orchestrator verdicts
+
+The dashboard always displays the latest available operational update.
+
+---
+
+# System Requirements
+
+Before installing Freight Safe, ensure the following are available.
+
+## Required Software
+
+* Python 3.10 or newer
+* Internet connection
+* Modern web browser
+
+## Required Access
+
+Freight Safe requires a valid Google API key to enable the intelligent decision engine.
+
+Without the API key:
+
+* The simulation may still start
+* Intelligent monitoring and analysis features will not function properly
+
+---
+
+# Installation Guide
+
+## Step 1: Download the Project
+
+Download or clone the Freight Safe project folder onto your computer.
+
+Place the folder somewhere easy to access.
+
+Example:
+
+* Desktop
+* Documents
+* Development workspace
+
+---
+
+## Step 2: Open a Terminal or Command Window
+
+Depending on your operating system:
+
+### Windows
+
+Open:
+
+* PowerShell
+* Command Prompt
+
+### macOS or Linux
+
+Open:
+
+* Terminal
+
+Navigate to the Freight Safe project folder.
+
+---
+
+## Step 3: Create a Virtual Environment
+
+A virtual environment keeps the project dependencies isolated from the rest of the computer.
+
+Run:
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
 ```
+
+---
+
+## Step 4: Activate the Virtual Environment
 
 ### Windows PowerShell
 
 ```powershell
-python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
 ```
 
 ### Windows CMD
 
 ```bat
-python -m venv .venv
 .venv\Scripts\activate.bat
+```
+
+### macOS or Linux
+
+```bash
+source .venv/bin/activate
+```
+
+---
+
+## Step 5: Install Required Components
+
+Run:
+
+```bash
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-## Environment Variables
+This installs all required system components.
 
-The app reads a `.env` file from the project root.
+Installation may take several minutes.
 
-Create a file named `.env` in the repository root and add:
+---
+
+# Configuring Freight Safe
+
+## Step 1: Create the Environment File
+
+Inside the project folder, create a file named:
+
+```text
+.env
+```
+
+---
+
+## Step 2: Add the API Configuration
+
+Add the following content:
 
 ```env
 GOOGLE_API_KEY=your_google_api_key_here
 GOOGLE_MODEL=gemini-2.0-flash
 ```
 
-Optional runtime variables used by the test suite and local runs:
+Replace:
 
-- `RUN_INTEGRATION_TESTS=1` enables tests that talk to the real model backend.
-- `ENFORCE_TIMING=1` makes the timing test fail if the response is too slow.
-- `PYTHONPATH=src` is useful when running Python modules directly from the repository root.
+```text
+your_google_api_key_here
+```
 
-If `GOOGLE_MODEL` is omitted, the default is `gemini-2.0-flash`.
-If `GOOGLE_API_KEY` is missing, the decision engine will raise an error at startup.
+with your actual Google API key.
 
-## Running the Project
+---
 
-### Run the Solara app
+## Important Notes
+
+* The API key is required for intelligent analysis.
+* If the API key is missing, the decision engine will not start.
+* Restart the application after changing the `.env` file.
+
+---
+
+# Starting Freight Safe
+
+## Starting the Web Application
+
+Run:
 
 ```bash
 solara run src/app.py
 ```
 
-Open the URL printed by Solara, usually:
+After startup, the system displays a local web address.
+
+Example:
 
 ```text
 http://localhost:8765
 ```
 
-The app contains two tabs:
+Open this address in your browser.
 
-- Simulation Map: the live Mesa/Solara visualization.
-- MAS Decision Dashboard: the latest agent negotiation result for the most recent tick.
+---
 
-### Run the headless simulation
+# What You Will See
 
-```bash
-python src/run_simulation.py
+## Main Application Tabs
+
+Freight Safe contains two main tabs.
+
+---
+
+## Simulation Map Tab
+
+This tab displays:
+
+* Truck movement
+* Route activity
+* Vehicle positioning
+* Live operational behavior
+
+Users can visually observe the freight operation in real time.
+
+---
+
+## MAS Decision Dashboard Tab
+
+This tab displays:
+
+* Agent analysis
+* Safety observations
+* Cargo assessments
+* Operational warnings
+* Final orchestrator decisions
+
+The dashboard updates automatically as the simulation runs.
+
+---
+
+# Available Operational Scenarios
+
+Freight Safe supports multiple simulation scenarios.
+
+The active scenario is selected in the system configuration.
+
+## Available Scenarios
+
+### Normal
+
+Both trucks follow expected operational behavior.
+
+Expected behavior:
+
+* Normal route progress
+* No major alerts
+* Stable monitoring assessments
+
+---
+
+### Deviation
+
+One truck takes a longer or unexpected route.
+
+Expected behavior:
+
+* Route deviation alerts
+* Increased monitoring attention
+* Updated operational assessments
+
+---
+
+### Anomaly Stop Open at D
+
+One truck stops unexpectedly and briefly opens its cargo door.
+
+Expected behavior:
+
+* Security-related observations
+* Door activity alerts
+* Elevated risk assessments
+
+---
+
+### Cargo State
+
+Cargo telemetry changes over time.
+
+Expected behavior:
+
+* Cargo condition monitoring
+* Cargo-related alerts
+* Dynamic safety evaluations
+
+---
+
+# How the Dashboard Information Should Be Interpreted
+
+The dashboard is designed to provide operational awareness.
+
+## Agent Proposals
+
+Each monitoring agent provides:
+
+* Observations
+* Reasoning
+* Recommendations
+
+These proposals may differ because each agent evaluates the situation differently.
+
+---
+
+## Orchestrator Verdict
+
+The orchestrator combines all agent assessments into a final operational decision.
+
+This is the primary recommendation presented to the user.
+
+Examples may include:
+
+* Continue monitoring
+* Investigate route deviation
+* Check cargo integrity
+* Review vehicle stop activity
+
+---
+
+# Expected System Behavior
+
+Users should expect:
+
+* Continuous live updates
+* Real-time truck movement
+* Automated operational analysis
+* Frequent dashboard refreshes
+* Scenario-specific alerts
+
+The dashboard always prioritizes the latest operational update.
+
+Older events may no longer appear once new information is received.
+
+---
+
+# Saved Output Files
+
+Freight Safe automatically creates operational output files.
+
+Important files include:
+
+## Dashboard History
+
+```text
+outputs/dashboard_history.json
 ```
 
-## How the Dashboard Works
+Stores recent dashboard information for the current session.
 
-- The dashboard listens to the `analysis.history` ZeroMQ topic.
-- It keeps only the latest tick in view.
-- Proposals are grouped by iteration and sorted by agent name.
-- The orchestrator verdict is shown as a highlighted card on the right.
-- The dashboard history file is stored at `outputs/dashboard_history.json`.
-- The dashboard history is cleared when the app starts, so each run begins with a fresh view.
+---
 
-## Data Flow
+## Monitoring Logs
 
-- Truck telemetry is published on `telemetry.truck`.
-- Monitoring snapshots are published on `monitoring.snapshot`.
-- Agent history is published on `analysis.history`.
-- The Solara app starts a background monitoring subscriber for live map support.
-- The dashboard subscribes to history updates and renders the most recent tick only.
-
-## Scenarios
-
-Choose the active scenario in [`src/config.py`](src/config.py).
-
-Available scenarios:
-
-- `normal`
-- `deviation`
-- `anomaly_stop_open_at_d`
-- `cargo_state`
-
-### Scenario Notes
-
-- `normal`: both trucks follow the expected route.
-- `deviation`: one truck takes a longer route path.
-- `anomaly_stop_open_at_d`: one truck stops at node D and opens its door briefly.
-- `cargo_state`: the cargo telemetry changes over time.
-
-## Output Files
-
-Important generated files:
-
-- [`outputs/dashboard_history.json`](outputs/dashboard_history.json): latest dashboard history persisted between tab switches and app refreshes.
-- [`outputs/monitoring_logs/output.json`](outputs/monitoring_logs/output.json): monitoring subscriber output.
-- [`outputs/llm_scenario_metrics_report.md`](outputs/llm_scenario_metrics_report.md): evaluation metrics report.
-- [`outputs/llm_scenario_timing_report.md`](outputs/llm_scenario_timing_report.md): timing report.
-
-## Testing
-
-Run the default test suite:
-
-```bash
-PYTHONPATH=src python -m pytest -q
+```text
+outputs/monitoring_logs/output.json
 ```
 
-Run the real-model integration tests:
+Stores monitoring activity and telemetry information.
 
-```bash
-RUN_INTEGRATION_TESTS=1 PYTHONPATH=src python -m pytest src/tests/test_evaluation_metrics.py -q -s
+---
+
+## Evaluation Reports
+
+```text
+outputs/llm_scenario_metrics_report.md
 ```
 
-Run the timing check with enforcement enabled:
+Contains evaluation metrics.
 
-```bash
-ENFORCE_TIMING=1 RUN_INTEGRATION_TESTS=1 PYTHONPATH=src python -m pytest src/tests/test_evaluation_metrics.py::test_llm_detection_and_response_time -q -s
+---
+
+## Timing Reports
+
+```text
+outputs/llm_scenario_timing_report.md
 ```
 
-## Key Files
+Contains timing and performance information.
 
-- [`src/config.py`](src/config.py): runtime settings, scenario definitions, topics, and environment loading.
-- [`src/app.py`](src/app.py): Solara entry point with tabbed UI.
-- [`src/run_simulation.py`](src/run_simulation.py): headless simulation entry point.
-- [`src/telemetry_subscriber.py`](src/telemetry_subscriber.py): monitoring log subscriber entry point.
-- [`src/simulation/model.py`](src/simulation/model.py): Mesa model orchestration and stop condition.
-- [`src/simulation/communication.py`](src/simulation/communication.py): ZeroMQ channels and subscriber helpers.
-- [`src/simulation/agents/decision_engine.py`](src/simulation/agents/decision_engine.py): Google GenAI LangGraph decision engine.
-- [`src/ui/dashboard.py`](src/ui/dashboard.py): dashboard rendering and history handling.
+---
 
-## Troubleshooting
+# Common Issues and Solutions
 
-### The app says `GOOGLE_API_KEY is not set`
+## Problem: "GOOGLE_API_KEY is not set"
 
-Add the key to your `.env` file or export it in your shell before starting the app.
+Cause:
 
-### The dashboard shows no data
+* The API key is missing from the `.env` file.
 
-Make sure the simulation is running and that the history topic is being published.
-The dashboard only displays the latest tick that has been received.
+Solution:
 
-### The map or dashboard freezes when switching tabs
+* Verify the `.env` file exists
+* Ensure the API key is correctly entered
+* Restart the application
 
-The current implementation renders only the active tab to avoid cross-tab re-render conflicts.
-If you still see issues, restart the app and start from a clean browser session.
+---
 
-### I changed `.env` but nothing happened
+## Problem: The Dashboard Shows No Data
 
-Restart the Solara app after editing environment variables. The values are loaded when the process starts.
+Cause:
 
-## Project Summary
+* The simulation is not running correctly
+* Data is not being published
 
-This project combines:
+Solution:
 
-- Mesa for agent-based simulation.
-- ZeroMQ for telemetry and history streaming.
-- Solara for the web UI.
-- LangGraph for multi-agent reasoning and negotiation.
-- LangChain Google Generative AI for the live decision engine.
+* Restart the simulation
+* Restart the web application
+* Wait several seconds for updates to appear
 
-If you want to extend the system, start with `src/config.py` for runtime settings and `src/simulation/agents/decision_engine.py` for agent behavior.
+---
+
+## Problem: The Dashboard or Map Freezes
+
+Cause:
+
+* Browser rendering issue
+* Application synchronization issue
+
+Solution:
+
+* Refresh the browser
+* Restart the application
+* Start a fresh browser session
+
+---
+
+## Problem: Changes to `.env` Do Not Apply
+
+Cause:
+
+* The application loads settings only during startup
+
+Solution:
+
+* Fully restart Freight Safe after editing `.env`
+
+---
+
+# Operational Expectations
+
+Freight Safe is designed as a simulation and monitoring environment.
+
+Users should understand:
+
+* The system simulates freight operations rather than controlling real vehicles
+* Intelligent analysis is generated automatically
+* Alerts and verdicts are based on simulated telemetry behavior
+* Different scenarios produce different operational outcomes
+
+The purpose of Freight Safe is to demonstrate:
+
+* Freight monitoring workflows
+* Telemetry analysis
+* Multi-agent operational reasoning
+* Automated safety assessment concepts
+
+---
+
+# Summary
+
+Freight Safe is a freight monitoring and operational analysis platform that combines:
+
+* Live truck simulation
+* Real-time telemetry monitoring
+* Intelligent multi-agent analysis
+* Automated operational assessments
+* Interactive dashboard visualization
+
+The platform is intended to help users understand how modern freight monitoring systems can identify unusual operational behavior and provide automated safety analysis in real time.
